@@ -17,8 +17,6 @@ class ProductCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final isWishlist = ref.watch(wishlistProvider.notifier).isInWishlist(product.id);
-
     // Using ref.watch for wishlistProvider directly doesn't rebuild if only one item changes 
     // unless we watch the whole list. Let's watch the list for the button icon state.
     final wishlist = ref.watch(wishlistProvider);
@@ -40,7 +38,7 @@ class ProductCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -79,7 +77,7 @@ class ProductCard extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '-\${product.discountPercentage}%',
+                        '-${product.discountPercentage}%',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -143,14 +141,14 @@ class ProductCard extends ConsumerWidget {
                       Icon(Icons.star, size: 14, color: Colors.amber[600]),
                       const SizedBox(width: 4),
                       Text(
-                        '\${product.rating}',
+                        '${product.rating}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '(\${product.reviewCount})',
+                        '(${product.reviewCount})',
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
@@ -164,14 +162,14 @@ class ProductCard extends ConsumerWidget {
                         children: [
                           if (product.oldPrice != null && product.oldPrice! > product.price)
                             Text(
-                              '\$\${product.oldPrice!.toStringAsFixed(2)}',
+                              '\$${product.oldPrice!.toStringAsFixed(2)}',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 decoration: TextDecoration.lineThrough,
                                 color: Colors.grey,
                               ),
                             ),
                           Text(
-                            '\$\${product.price.toStringAsFixed(2)}',
+                            '\$${product.price.toStringAsFixed(2)}',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.primary,

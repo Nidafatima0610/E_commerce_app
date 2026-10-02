@@ -74,7 +74,7 @@ class CartScreen extends ConsumerWidget {
                   child: ListView.separated(
                     padding: const EdgeInsets.all(20),
                     itemCount: cartItems.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    separatorBuilder: (context, index) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       final item = cartItems[index];
                       return Container(
@@ -83,7 +83,7 @@ class CartScreen extends ConsumerWidget {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
                           ],
                         ),
                         child: Row(
@@ -170,7 +170,7 @@ class CartScreen extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
                   ),
                   child: SafeArea(
                     child: Column(
@@ -248,7 +248,7 @@ class CartScreen extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Total', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                            Text('\$\$total', style: theme.textTheme.displaySmall?.copyWith(
+                            Text('\$${total.toStringAsFixed(2)}', style: theme.textTheme.displaySmall?.copyWith(
                               color: theme.colorScheme.primary,
                               fontWeight: FontWeight.bold,
                             )),

@@ -85,14 +85,14 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                         children: [
                           if (widget.product.oldPrice != null && widget.product.oldPrice! > widget.product.price)
                             Text(
-                              '\$\${widget.product.oldPrice!.toStringAsFixed(2)}',
+                              '\$${widget.product.oldPrice!.toStringAsFixed(2)}',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 decoration: TextDecoration.lineThrough,
                                 color: Colors.grey,
                               ),
                             ),
                           Text(
-                            '\$\${widget.product.price.toStringAsFixed(2)}',
+                            '\$${widget.product.price.toStringAsFixed(2)}',
                             style: theme.textTheme.displaySmall?.copyWith(
                               color: theme.colorScheme.primary,
                               fontWeight: FontWeight.bold,
@@ -108,7 +108,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       Icon(Icons.star, color: Colors.amber[600], size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        '\${widget.product.rating} (\${widget.product.reviewCount} Reviews)',
+                        '${widget.product.rating} (${widget.product.reviewCount} Reviews)',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -155,7 +155,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, -5),
               ),

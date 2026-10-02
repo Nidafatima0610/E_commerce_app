@@ -33,7 +33,7 @@ class ProfileScreen extends ConsumerWidget {
             // Menu Options
             _buildMenuTile(context, Icons.person_outline, 'Edit Profile'),
             _buildMenuTile(context, Icons.location_on_outlined, 'Shipping Addresses'),
-            _buildMenuTile(context, Icons.shopping_bag_outlined, 'My Orders (\${orders.length})', 
+            _buildMenuTile(context, Icons.shopping_bag_outlined, 'My Orders (${orders.length})', 
               onTap: () {
                 Navigator.push(
                   context,
@@ -45,7 +45,7 @@ class ProfileScreen extends ConsumerWidget {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.dark_mode_outlined, color: Theme.of(context).colorScheme.primary),
@@ -89,7 +89,7 @@ class ProfileScreen extends ConsumerWidget {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, color: Theme.of(context).colorScheme.primary),
