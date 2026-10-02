@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
+import 'order_history_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -36,11 +37,27 @@ class ProfileScreen extends ConsumerWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const OrdersScreen()),
+                  MaterialPageRoute(builder: (context) => const OrderHistoryScreen()),
                 );
               }
             ),
-            _buildMenuTile(context, Icons.settings_outlined, 'Settings'),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.dark_mode_outlined, color: Theme.of(context).colorScheme.primary),
+              ),
+              title: const Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w600)),
+              trailing: Switch(
+                value: ref.watch(themeModeProvider) == ThemeMode.dark,
+                onChanged: (val) {
+                  ref.read(themeModeProvider.notifier).toggleTheme();
+                },
+              ),
+            ),
             _buildMenuTile(context, Icons.help_outline, 'Help & Support'),
             
             const SizedBox(height: 32),
@@ -80,58 +97,6 @@ class ProfileScreen extends ConsumerWidget {
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       onTap: onTap,
-    );
-  }
-}
-
-class OrdersScreen extends ConsumerWidget {
-  const OrdersScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final orders = ref.watch(ordersProvider);
-    
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Orders')),
-      body: orders.isEmpty
-          ? const Center(child: Text('No orders yet'))
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(order.id, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Text(
-                              order.status,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 24),
-                        Text('\${order.items.length} Items'),
-                        const SizedBox(height: 8),
-                        Text('Total: \$\${order.totalAmount.toStringAsFixed(2)}', 
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
     );
   }
 }

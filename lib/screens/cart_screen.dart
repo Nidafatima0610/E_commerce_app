@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
+import '../models/coupon.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends ConsumerWidget {
@@ -11,8 +12,11 @@ class CartScreen extends ConsumerWidget {
     final cartItems = ref.watch(cartProvider);
     final theme = Theme.of(context);
     final subtotal = ref.watch(cartProvider.notifier).subtotal;
+    final coupon = ref.watch(appliedCouponProvider);
+    final discount = ref.read(cartProvider.notifier).calculateDiscount(coupon);
     final shipping = subtotal > 0 ? 15.0 : 0.0;
-    final total = subtotal + shipping;
+    final total = subtotal - discount + shipping;
+    final couponController = TextEditingController(text: coupon?.code ?? '');
 
     return Scaffold(
       appBar: AppBar(
@@ -172,19 +176,68 @@ class CartScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Coupon System
+                        if (subtotal > 0) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: couponController,
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter Coupon (e.g. SAVE10)',
+                                    isDense: true,
+                                    enabled: coupon == null,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              ElevatedButton(
+                                onPressed: () {
+                                  if (coupon != null) {
+                                    ref.read(appliedCouponProvider.notifier).update(null);
+                                  } else {
+                                    final text = couponController.text.trim().toUpperCase();
+                                    final found = dummyCoupons.where((c) => c.code == text).firstOrNull;
+                                    if (found != null && subtotal >= found.minOrderAmount) {
+                                      ref.read(appliedCouponProvider.notifier).update(found);
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Coupon Applied!')));
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid or expired coupon')));
+                                    }
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: coupon != null ? theme.colorScheme.error : theme.colorScheme.primary,
+                                ),
+                                child: Text(coupon != null ? 'Remove' : 'Apply'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Subtotal', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey)),
-                            Text('\$\$subtotal', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            Text('\$${subtotal.toStringAsFixed(2)}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                           ],
                         ),
+                        if (discount > 0) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Discount (${coupon?.code})', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.green)),
+                              Text('-\$${discount.toStringAsFixed(2)}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.green)),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Shipping', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey)),
-                            Text('\$\$shipping', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            Text('\$${shipping.toStringAsFixed(2)}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                           ],
                         ),
                         const Padding(

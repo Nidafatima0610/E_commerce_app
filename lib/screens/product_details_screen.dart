@@ -18,6 +18,14 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
   Color selectedColor = Colors.black;
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      ref.read(recentlyViewedProvider.notifier).addProduct(widget.product);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final inWishlist = ref.watch(wishlistProvider).any((p) => p.id == widget.product.id);

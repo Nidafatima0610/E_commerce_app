@@ -16,7 +16,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final subtotal = ref.read(cartProvider.notifier).subtotal;
-    final total = subtotal + 15.0;
+    final coupon = ref.read(appliedCouponProvider);
+    final discount = ref.read(cartProvider.notifier).calculateDiscount(coupon);
+    final shipping = subtotal > 0 ? 15.0 : 0.0;
+    final total = subtotal - discount + shipping;
+    
+    final addresses = ref.watch(addressesProvider);
+    final defaultAddress = addresses.where((a) => a.isDefault).firstOrNull ?? addresses.firstOrNull;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
@@ -25,15 +31,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Shipping Address', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                title: const Text('Umair', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('123 Main Street, Appartment 4B\nNew York, NY 10001\nUnited States'),
-                trailing: TextButton(onPressed: () {}, child: const Text('Edit')),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Shipping Address', style: theme.textTheme.titleLarge),
+                TextButton(
+                  onPressed: () {
+                    // Navigate to Add Address
+                  },
+                  child: const Text('Add New'),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            if (defaultAddress == null)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('No addresses found. Please add one.'),
+                ),
+              )
+            else
+              Card(
+                child: ListTile(
+                  title: Text(defaultAddress.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${defaultAddress.street}\n${defaultAddress.city}, ${defaultAddress.state} ${defaultAddress.zipCode}\n${defaultAddress.country}'),
+                  trailing: TextButton(onPressed: () {}, child: const Text('Change')),
+                ),
+              ),
             const SizedBox(height: 24),
 
             Text('Payment Method', style: theme.textTheme.titleLarge),
@@ -48,8 +73,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                const Text('Subtotal'),
+                Text('\$${subtotal.toStringAsFixed(2)}'),
+              ],
+            ),
+            if (discount > 0)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Discount'),
+                  Text('-\$${discount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.green)),
+                ],
+              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Shipping'),
+                Text('\$${shipping.toStringAsFixed(2)}'),
+              ],
+            ),
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 const Text('Total'),
-                Text('\$\$total', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                Text('\$${total.toStringAsFixed(2)}', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 32),
@@ -57,9 +105,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
+                  if (defaultAddress == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please add a delivery address')),
+                    );
+                    return;
+                  }
+
                   final cartItems = ref.read(cartProvider);
-                  ref.read(ordersProvider.notifier).addOrder(cartItems, total);
+                  ref.read(ordersProvider.notifier).addOrder(
+                    cartItems,
+                    total,
+                    address: defaultAddress,
+                    paymentMethod: _selectedPayment,
+                  );
                   ref.read(cartProvider.notifier).clearCart();
+                  ref.read(appliedCouponProvider.notifier).update(null);
                   
                   showDialog(
                     context: context,
@@ -78,7 +139,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             onPressed: () {
                               Navigator.of(ctx).pop();
                               Navigator.of(context).pop();
-                              // Could navigate to My Orders instead
                             },
                             child: const Text('Continue Shopping'),
                           ),

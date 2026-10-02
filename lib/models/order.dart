@@ -1,4 +1,5 @@
 import 'cart_item.dart';
+import 'address.dart';
 
 class Order {
   final String id;
@@ -6,6 +7,8 @@ class Order {
   final double totalAmount;
   final DateTime date;
   final String status;
+  final Address? deliveryAddress;
+  final String paymentMethod;
 
   const Order({
     required this.id,
@@ -13,5 +16,7 @@ class Order {
     required this.totalAmount,
     required this.date,
     this.status = 'Processing',
+    this.deliveryAddress,
+    this.paymentMethod = 'Credit Card',
   });
 }
