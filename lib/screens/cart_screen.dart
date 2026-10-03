@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../models/coupon.dart';
+import '../core/currency_format.dart';
 import '../widgets/custom_image.dart';
 import 'checkout_screen.dart';
 
@@ -31,7 +32,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       final subtotal = ref.read(cartProvider.notifier).subtotal;
       if (subtotal < foundCoupon.minOrderAmount) {
         setState(() {
-          _couponError = 'Min. order amount \$${foundCoupon.minOrderAmount.toInt()} required';
+          _couponError = 'Min. order amount ${CurrencyFormat.format(foundCoupon.minOrderAmount)} required';
         });
       } else {
         ref.read(appliedCouponProvider.notifier).update(foundCoupon);
@@ -48,7 +49,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       }
     } else {
       setState(() {
-        _couponError = 'Invalid promo code. Try "SAVE10" or "MINUS50"';
+        _couponError = 'Invalid promo code. Try "SAVE10", "PKR500", or "AZADI20"';
       });
     }
   }
@@ -61,7 +62,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final subtotal = ref.watch(cartProvider.notifier).subtotal;
     final coupon = ref.watch(appliedCouponProvider);
     final discount = ref.read(cartProvider.notifier).calculateDiscount(coupon);
-    final shipping = subtotal > 100 || subtotal == 0 ? 0.0 : 12.0;
+    final shipping = subtotal >= 3000 || subtotal == 0 ? 0.0 : 250.0;
     final total = (subtotal - discount + shipping).clamp(0.0, double.infinity);
 
     return Scaffold(
@@ -153,6 +154,60 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Free Shipping Notice
+                  if (subtotal > 0 && subtotal < 3000)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_shipping_outlined, color: Color(0xFF2563EB), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Add ${CurrencyFormat.format(3000 - subtotal)} more to get FREE Delivery across Pakistan!',
+                              style: const TextStyle(
+                                color: Color(0xFF1E40AF),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (subtotal >= 3000)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.25)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'You have unlocked FREE Standard Delivery!',
+                              style: TextStyle(
+                                color: Color(0xFF065F46),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                   // Cart items list
                   ListView.separated(
                     shrinkWrap: true,
@@ -252,10 +307,11 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                     children: [
                                       // Price per unit
                                       Text(
-                                        '\$${item.product.price.toStringAsFixed(2)}',
+                                        CurrencyFormat.format(item.product.price),
                                         style: TextStyle(
                                           color: isDark ? Colors.grey[400] : Colors.grey[600],
                                           fontSize: 12,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
 
@@ -305,7 +361,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
 
                                       // Item Subtotal
                                       Text(
-                                        '\$${item.subtotal.toStringAsFixed(2)}',
+                                        CurrencyFormat.format(item.subtotal),
                                         style: TextStyle(
                                           fontWeight: FontWeight.w800,
                                           fontSize: 14,
@@ -364,7 +420,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                     const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B981)),
                                     const SizedBox(width: 8),
                                     Text(
-                                      '${coupon.code} applied (-${coupon.isPercentage ? "${coupon.discount.toInt()}%" : "\$${coupon.discount.toInt()}"})',
+                                      '${coupon.code} applied (-${coupon.isPercentage ? "${coupon.discount.toInt()}%" : CurrencyFormat.format(coupon.discount)})',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Color(0xFF047857),
@@ -392,7 +448,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   controller: _couponController,
                                   textCapitalization: TextCapitalization.characters,
                                   decoration: InputDecoration(
-                                    hintText: 'Enter code (e.g. SAVE10)',
+                                    hintText: 'Enter code (e.g. SAVE10, PKR500)',
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     errorText: _couponError,
                                   ),
@@ -432,17 +488,17 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 14),
-                        _buildPriceRow('Subtotal', '\$${subtotal.toStringAsFixed(2)}', theme),
+                        _buildPriceRow('Subtotal', CurrencyFormat.format(subtotal), theme),
                         if (discount > 0)
                           _buildPriceRow(
                             'Coupon Discount',
-                            '-\$${discount.toStringAsFixed(2)}',
+                            '-${CurrencyFormat.format(discount)}',
                             theme,
                             color: const Color(0xFF10B981),
                           ),
                         _buildPriceRow(
                           'Delivery Fee',
-                          shipping == 0 ? 'FREE' : '\$${shipping.toStringAsFixed(2)}',
+                          shipping == 0 ? 'FREE' : CurrencyFormat.format(shipping),
                           theme,
                           color: shipping == 0 ? const Color(0xFF10B981) : null,
                         ),
@@ -455,7 +511,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             Text(
-                              '\$${total.toStringAsFixed(2)}',
+                              CurrencyFormat.format(total),
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: theme.colorScheme.primary,
@@ -499,7 +555,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       children: [
                         Text('Total', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
                         Text(
-                          '\$${total.toStringAsFixed(2)}',
+                          CurrencyFormat.format(total),
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: theme.colorScheme.primary,

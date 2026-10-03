@@ -12,8 +12,9 @@ class Coupon {
   });
 }
 
-// Dummy coupons
+// Coupons tailored for Pakistani shoppers
 const List<Coupon> dummyCoupons = [
-  Coupon(code: 'SAVE10', discount: 10, isPercentage: true),
-  Coupon(code: 'MINUS50', discount: 50, isPercentage: false, minOrderAmount: 200),
+  Coupon(code: 'SAVE10', discount: 10, isPercentage: true, minOrderAmount: 1500),
+  Coupon(code: 'PKR500', discount: 500, isPercentage: false, minOrderAmount: 3000),
+  Coupon(code: 'AZADI20', discount: 20, isPercentage: true, minOrderAmount: 5000),
 ];

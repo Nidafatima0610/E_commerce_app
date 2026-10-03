@@ -6,6 +6,14 @@ class LocalStorageService {
 
   LocalStorageService(this._prefs);
 
+  Future<void> saveString(String key, String value) async {
+    await _prefs.setString(key, value);
+  }
+
+  String? getString(String key) {
+    return _prefs.getString(key);
+  }
+
   Future<void> saveStringList(String key, List<String> list) async {
     await _prefs.setStringList(key, list);
   }

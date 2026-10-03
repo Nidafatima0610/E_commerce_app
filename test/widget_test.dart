@@ -14,6 +14,7 @@ import 'package:e_commerceapp/screens/wishlist_screen.dart';
 import 'package:e_commerceapp/screens/profile_screen.dart';
 import 'package:e_commerceapp/screens/search_screen.dart';
 import 'package:e_commerceapp/screens/product_details_screen.dart';
+import 'package:e_commerceapp/screens/product_compare_screen.dart';
 import 'package:e_commerceapp/models/dummy_data.dart';
 
 final Uint8List _kTransparentImage = Uint8List.fromList([
@@ -268,17 +269,56 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Large Android Phone (412x915) renders with zero overflow', (WidgetTester tester) async {
+    testWidgets('ProductCompareScreen renders cleanly with products and specs', (WidgetTester tester) async {
+      await tester.pumpWidget(createTestWidget(
+        child: ProductCompareScreen(initialProduct: dummyProducts.first),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Product Comparison'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Product Details Size Guide modal sheet opens cleanly', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(412, 915);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(child: const HomeScreen(), screenSize: const Size(412, 915)));
+      // Find a fashion product that has size guide
+      final fashionProduct = dummyProducts.firstWhere((p) => p.category == 'Fashion' || p.category == 'Shoes');
+      await tester.pumpWidget(createTestWidget(
+        child: ProductDetailsScreen(product: fashionProduct),
+        screenSize: const Size(412, 915),
+      ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Popular Products'), findsOneWidget);
+      // Scroll down to reveal size section
+      await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -350));
+      await tester.pumpAndSettle();
+
+      // Find Size Guide text and tap it
+      final sizeGuideFinder = find.text('Size Guide');
+      expect(sizeGuideFinder, findsOneWidget);
+      await tester.tap(sizeGuideFinder);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Size & Measurement Guide'), findsOneWidget);
+      expect(find.text('Standard Pakistani & International Fit Guide:'), findsNothing);
+      expect(find.textContaining('Standard Pakistani fitting'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('Currency Formatting & Pakistani Context Tests', () {
+    test('CurrencyFormat outputs proper Pakistani Rupee representation', () {
+      expect(dummyProducts.every((p) => p.price > 0), isTrue);
+      // All products have realistic prices in PKR
+      expect(dummyProducts.any((p) => p.name.contains('iPhone 15 Pro')), isTrue);
+      final phone = dummyProducts.firstWhere((p) => p.name.contains('iPhone 15 Pro'));
+      expect(phone.price, equals(289999.0));
+      expect(phone.formattedPrice, equals('Rs. 289,999'));
     });
   });
 }

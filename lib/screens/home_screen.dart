@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/product.dart';
 import '../providers/app_providers.dart';
 import '../widgets/product_card.dart';
+import '../widgets/custom_image.dart';
+import '../core/currency_format.dart';
 import 'search_screen.dart';
 import 'product_list_screen.dart';
+import 'product_details_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -46,6 +50,20 @@ class HomeScreen extends ConsumerWidget {
     final dealProducts = products.where((p) => p.discountPercentage > 0).toList();
     final categories = ref.watch(categoriesProvider);
     final recentlyViewed = ref.watch(recentlyViewedProvider);
+    final userProfile = ref.watch(userProfileProvider);
+    final orders = ref.watch(ordersProvider);
+
+    // Extract products from previous orders for "Buy Again"
+    final buyAgainProducts = <Product>[];
+    final seenIds = <String>{};
+    for (final order in orders) {
+      for (final item in order.items) {
+        if (!seenIds.contains(item.product.id)) {
+          seenIds.add(item.product.id);
+          buyAgainProducts.add(item.product);
+        }
+      }
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -77,7 +95,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Umair',
+                            userProfile.name,
                             style: theme.textTheme.headlineMedium?.copyWith(
                               fontWeight: FontWeight.w800,
                             ),
@@ -233,7 +251,7 @@ class HomeScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Explore hundreds of electronics & styles',
+                              'Explore hundreds of electronics, shoes & styles across Pakistan',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.85),
                                 fontSize: 12,
@@ -368,64 +386,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
 
-              // ==================== 5. POPULAR PRODUCTS ====================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Popular Products',
-                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            'Top picks loved by customers',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ProductListScreen(
-                              title: 'Popular Products',
-                              onlyFeatured: true,
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('See All'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 275,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: featuredProducts.take(6).length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 14),
-                  itemBuilder: (context, index) {
-                    return ProductCard(
-                      product: featuredProducts[index],
-                      width: 170,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 26),
-
-              // ==================== 6. FLASH SALE / DEALS ====================
+              // ==================== 5. FLASH DEALS / DISCOUNTS ====================
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Row(
@@ -501,7 +462,227 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 26),
 
-              // ==================== 7. RECOMMENDED FOR YOU (GRID) ====================
+              // ==================== 6. POPULAR PRODUCTS ====================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Popular Products',
+                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            'Top picks loved by customers',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ProductListScreen(
+                              title: 'Popular Products',
+                              onlyFeatured: true,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('See All'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 275,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: featuredProducts.take(6).length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 14),
+                  itemBuilder: (context, index) {
+                    return ProductCard(
+                      product: featuredProducts[index],
+                      width: 170,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 26),
+
+              // ==================== 7. QUICK BUY AGAIN (Conditional) ====================
+              if (buyAgainProducts.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.replay_rounded, color: Color(0xFF10B981), size: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Buy Again',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  Text(
+                                    'Quickly reorder your previous favorites',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 110,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: buyAgainProducts.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final product = buyAgainProducts[index];
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProductDetailsScreen(product: product),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 250,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: SizedBox(
+                                  width: 64,
+                                  height: 64,
+                                  child: CustomNetworkImage(
+                                    imageUrl: product.image,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      product.brand,
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      product.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      CurrencyFormat.format(product.price),
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Material(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                child: InkWell(
+                                  onTap: () {
+                                    ref.read(cartProvider.notifier).addItem(product);
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Added ${product.name} to cart'),
+                                        duration: const Duration(milliseconds: 1400),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Icon(
+                                      Icons.add_shopping_cart_rounded,
+                                      size: 18,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 26),
+              ],
+
+              // ==================== 8. RECOMMENDED FOR YOU (GRID) ====================
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Row(
@@ -563,7 +744,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 28),
 
-              // ==================== 8. RECENTLY VIEWED ====================
+              // ==================== 9. RECENTLY VIEWED ====================
               if (recentlyViewed.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),

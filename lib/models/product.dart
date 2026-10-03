@@ -1,3 +1,5 @@
+import '../core/currency_format.dart';
+
 class Product {
   final String id;
   final String name;
@@ -36,4 +38,8 @@ class Product {
     if (oldPrice == null || oldPrice! <= price) return 0;
     return (((oldPrice! - price) / oldPrice!) * 100).round();
   }
+
+  // Formatted PKR price
+  String get formattedPrice => CurrencyFormat.format(price);
+  String? get formattedOldPrice => oldPrice != null ? CurrencyFormat.format(oldPrice!) : null;
 }

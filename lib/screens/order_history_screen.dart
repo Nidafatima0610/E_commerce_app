@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
+import '../core/currency_format.dart';
 import '../widgets/custom_image.dart';
+import 'product_details_screen.dart';
 
 class OrderHistoryScreen extends ConsumerWidget {
   const OrderHistoryScreen({super.key});
@@ -37,6 +39,92 @@ class OrderHistoryScreen extends ConsumerWidget {
   String _formatDate(DateTime date) {
     final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  int _getStatusStep(String status) {
+    switch (status.toLowerCase()) {
+      case 'processing':
+        return 1;
+      case 'confirmed':
+        return 2;
+      case 'shipped':
+        return 3;
+      case 'delivered':
+        return 4;
+      default:
+        return 1;
+    }
+  }
+
+  Widget _buildOrderProgressTracker(String status, ThemeData theme) {
+    final currentStep = _getStatusStep(status);
+    final steps = ['Processing', 'Confirmed', 'Shipped', 'Delivered'];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(steps.length, (index) {
+              final stepIndex = index + 1;
+              final isCompleted = stepIndex <= currentStep;
+
+              return Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isCompleted ? theme.colorScheme.primary : Colors.grey.shade300,
+                      ),
+                      child: Center(
+                        child: isCompleted
+                            ? const Icon(Icons.check, size: 13, color: Colors.white)
+                            : Text(
+                                '$stepIndex',
+                                style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                    ),
+                    if (index < steps.length - 1)
+                      Expanded(
+                        child: Container(
+                          height: 3,
+                          color: stepIndex < currentStep ? theme.colorScheme.primary : Colors.grey.shade300,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: steps.map((s) {
+              final isCompleted = _getStatusStep(s) <= currentStep;
+              return Text(
+                s,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
+                  color: isCompleted ? theme.colorScheme.primary : Colors.grey,
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -168,7 +256,7 @@ class OrderHistoryScreen extends ConsumerWidget {
                               ),
                             ),
                             Text(
-                              '\$${order.totalAmount.toStringAsFixed(2)} (${order.items.length} items)',
+                              '${CurrencyFormat.format(order.totalAmount)} (${order.items.length} items)',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: theme.colorScheme.primary,
@@ -185,7 +273,11 @@ class OrderHistoryScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Order info
+                              // Order Progress Stepper
+                              _buildOrderProgressTracker(order.status, theme),
+                              const SizedBox(height: 8),
+
+                              // Payment & Address Details
                               Row(
                                 children: [
                                   Icon(Icons.payment, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -218,48 +310,63 @@ class OrderHistoryScreen extends ConsumerWidget {
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               const SizedBox(height: 10),
-                              ...order.items.map((item) => Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 6.0),
-                                    child: Row(
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: SizedBox(
-                                            width: 48,
-                                            height: 48,
-                                            child: CustomNetworkImage(imageUrl: item.product.image),
+
+                              // Product list in order
+                              ...order.items.map((item) => InkWell(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => ProductDetailsScreen(product: item.product),
+                                        ),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: SizedBox(
+                                              width: 48,
+                                              height: 48,
+                                              child: CustomNetworkImage(imageUrl: item.product.image),
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                item.product.name,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                              ),
-                                              Text(
-                                                'Qty: ${item.quantity} • \$${item.product.price.toStringAsFixed(2)}',
-                                                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12),
-                                              ),
-                                            ],
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item.product.name,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                                ),
+                                                Text(
+                                                  'Qty: ${item.quantity} • ${CurrencyFormat.format(item.product.price)}',
+                                                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        Text(
-                                          '\$${item.subtotal.toStringAsFixed(2)}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                      ],
+                                          Text(
+                                            CurrencyFormat.format(item.subtotal),
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   )),
                               const SizedBox(height: 14),
+
+                              // Reorder CTA
                               Row(
                                 children: [
                                   Expanded(
-                                    child: OutlinedButton(
+                                    child: OutlinedButton.icon(
                                       onPressed: () {
                                         for (final item in order.items) {
                                           ref.read(cartProvider.notifier).addItem(item.product);
@@ -271,7 +378,8 @@ class OrderHistoryScreen extends ConsumerWidget {
                                           ),
                                         );
                                       },
-                                      child: const Text('Reorder Items'),
+                                      icon: const Icon(Icons.replay_rounded, size: 16),
+                                      label: const Text('Reorder Items'),
                                     ),
                                   ),
                                 ],

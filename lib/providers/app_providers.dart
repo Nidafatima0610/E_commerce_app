@@ -247,25 +247,45 @@ class OrdersNotifier extends Notifier<List<Order>> {
           CartItem(id: 'c1', product: dummyProducts[0], quantity: 1),
           CartItem(id: 'c2', product: dummyProducts[31], quantity: 1),
         ],
-        totalAmount: 748.99,
+        totalAmount: 31998.0,
         date: DateTime.now().subtract(const Duration(days: 2)),
         status: 'Delivered',
-        paymentMethod: 'Credit Card',
+        paymentMethod: 'Cash on Delivery',
+        deliveryAddress: const Address(
+          id: 'addr_default',
+          name: 'Umair',
+          street: 'House 14-B, Street 5, Sector F-7/2',
+          city: 'Islamabad',
+          state: 'ICT',
+          zipCode: '44000',
+          country: 'Pakistan',
+          isDefault: true,
+        ),
       ),
       Order(
         id: 'ORD-97430',
         items: [
           CartItem(id: 'c3', product: dummyProducts[8], quantity: 2),
         ],
-        totalAmount: 130.00,
+        totalAmount: 6998.0,
         date: DateTime.now().subtract(const Duration(days: 8)),
         status: 'Shipped',
-        paymentMethod: 'Apple Pay',
+        paymentMethod: 'JazzCash',
+        deliveryAddress: const Address(
+          id: 'addr_default',
+          name: 'Umair',
+          street: 'House 14-B, Street 5, Sector F-7/2',
+          city: 'Islamabad',
+          state: 'ICT',
+          zipCode: '44000',
+          country: 'Pakistan',
+          isDefault: true,
+        ),
       ),
     ];
   }
 
-  void addOrder(List<CartItem> items, double totalAmount, {Address? address, String paymentMethod = 'Credit Card'}) {
+  void addOrder(List<CartItem> items, double totalAmount, {Address? address, String paymentMethod = 'Cash on Delivery'}) {
     final newOrder = Order(
       id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       items: List.from(items),
@@ -301,11 +321,11 @@ class AddressesNotifier extends Notifier<List<Address>> {
         Address(
           id: 'addr_default',
           name: 'Umair',
-          street: '452 Market Street, Suite 300',
-          city: 'San Francisco',
-          state: 'CA',
-          zipCode: '94105',
-          country: 'United States',
+          street: 'House 14-B, Street 5, Sector F-7/2',
+          city: 'Islamabad',
+          state: 'ICT',
+          zipCode: '44000',
+          country: 'Pakistan',
           isDefault: true,
         ),
       ];
@@ -330,6 +350,11 @@ class AddressesNotifier extends Notifier<List<Address>> {
 
   void removeAddress(String id) {
     state = state.where((a) => a.id != id).toList();
+    _saveAddresses();
+  }
+
+  void setDefaultAddress(String id) {
+    state = state.map((a) => a.copyWith(isDefault: a.id == id)).toList();
     _saveAddresses();
   }
 }
@@ -422,3 +447,79 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 }
 
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(() => ThemeModeNotifier());
+
+// Compare Provider (supports up to 3 products)
+class CompareNotifier extends Notifier<List<Product>> {
+  @override
+  List<Product> build() => [];
+
+  bool toggleProduct(Product product) {
+    if (state.any((p) => p.id == product.id)) {
+      state = state.where((p) => p.id != product.id).toList();
+      return false;
+    } else {
+      if (state.length >= 3) {
+        return false;
+      }
+      state = [...state, product];
+      return true;
+    }
+  }
+
+  void removeProduct(String id) {
+    state = state.where((p) => p.id != id).toList();
+  }
+
+  bool isInCompare(String id) {
+    return state.any((p) => p.id == id);
+  }
+
+  void clear() {
+    state = [];
+  }
+}
+
+final compareProvider = NotifierProvider<CompareNotifier, List<Product>>(() => CompareNotifier());
+
+// User Profile Model & Provider
+class UserProfile {
+  final String name;
+  final String email;
+  final String phone;
+
+  const UserProfile({
+    required this.name,
+    required this.email,
+    required this.phone,
+  });
+
+  UserProfile copyWith({String? name, String? email, String? phone}) {
+    return UserProfile(
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+    );
+  }
+}
+
+class UserProfileNotifier extends Notifier<UserProfile> {
+  @override
+  UserProfile build() {
+    final storage = ref.read(storageServiceProvider);
+    final name = storage.getString('user_name') ?? 'Umair';
+    final email = storage.getString('user_email') ?? 'umair@example.com';
+    final phone = storage.getString('user_phone') ?? '+92 300 1234567';
+    return UserProfile(name: name, email: email, phone: phone);
+  }
+
+  void updateProfile({required String name, required String email, required String phone}) {
+    state = UserProfile(name: name, email: email, phone: phone);
+    final storage = ref.read(storageServiceProvider);
+    storage.saveString('user_name', name);
+    storage.saveString('user_email', email);
+    storage.saveString('user_phone', phone);
+  }
+}
+
+final userProfileProvider = NotifierProvider<UserProfileNotifier, UserProfile>(() => UserProfileNotifier());
+

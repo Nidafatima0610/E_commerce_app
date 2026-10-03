@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/address.dart';
 import '../providers/app_providers.dart';
+import '../core/currency_format.dart';
 import '../widgets/custom_image.dart';
 import 'order_history_screen.dart';
 
@@ -13,41 +14,46 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  String _selectedPayment = 'Credit Card';
+  String _selectedPayment = 'Cash on Delivery';
 
   final List<Map<String, dynamic>> _paymentMethods = [
     {
-      'id': 'Credit Card',
-      'title': 'Credit / Debit Card',
-      'subtitle': 'Visa, Mastercard, Amex',
-      'icon': Icons.credit_card_rounded,
-    },
-    {
-      'id': 'Apple Pay',
-      'title': 'Apple Pay / Google Pay',
-      'subtitle': 'Fast one-touch payment',
-      'icon': Icons.phone_android_rounded,
-    },
-    {
-      'id': 'PayPal',
-      'title': 'PayPal Wallet',
-      'subtitle': 'Safe online payment',
-      'icon': Icons.account_balance_wallet_rounded,
-    },
-    {
       'id': 'Cash on Delivery',
-      'title': 'Cash on Delivery',
-      'subtitle': 'Pay upon package arrival',
-      'icon': Icons.local_shipping_outlined,
+      'title': 'Cash on Delivery (COD)',
+      'subtitle': 'Pay cash upon arrival • Most popular across Pakistan',
+      'icon': Icons.payments_outlined,
+      'isPopular': true,
+    },
+    {
+      'id': 'JazzCash / EasyPaisa',
+      'title': 'JazzCash / EasyPaisa',
+      'subtitle': 'Mobile wallet transfer • Zero extra fee',
+      'icon': Icons.account_balance_wallet_rounded,
+      'isPopular': false,
+    },
+    {
+      'id': 'Debit / Credit Card',
+      'title': 'Debit / Credit Card',
+      'subtitle': 'Visa, Mastercard, PayPak accepted',
+      'icon': Icons.credit_card_rounded,
+      'isPopular': false,
+    },
+    {
+      'id': 'Bank Transfer (IBFT)',
+      'title': 'Bank Transfer (IBFT / Raast)',
+      'subtitle': 'Direct bank deposit confirmation',
+      'icon': Icons.account_balance_rounded,
+      'isPopular': false,
     },
   ];
 
   void _showAddAddressDialog(BuildContext context) {
-    final nameCtrl = TextEditingController(text: 'Umair');
+    final user = ref.read(userProfileProvider);
+    final nameCtrl = TextEditingController(text: user.name);
     final streetCtrl = TextEditingController();
-    final cityCtrl = TextEditingController();
-    final stateCtrl = TextEditingController();
-    final zipCtrl = TextEditingController();
+    final cityCtrl = TextEditingController(text: 'Islamabad');
+    final stateCtrl = TextEditingController(text: 'ICT');
+    final zipCtrl = TextEditingController(text: '44000');
 
     showModalBottomSheet(
       context: context,
@@ -68,7 +74,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Add Shipping Address',
+                'Add Shipping Address in Pakistan',
                 style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
@@ -79,7 +85,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: streetCtrl,
-                decoration: const InputDecoration(labelText: 'Street Address'),
+                decoration: const InputDecoration(
+                  labelText: 'House / Flat #, Street, Area / Sector',
+                  hintText: 'e.g. House 24-B, Street 10, Sector F-8/1',
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -87,14 +96,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Expanded(
                     child: TextField(
                       controller: cityCtrl,
-                      decoration: const InputDecoration(labelText: 'City'),
+                      decoration: const InputDecoration(labelText: 'City (e.g. Lahore, Karachi)'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
                       controller: stateCtrl,
-                      decoration: const InputDecoration(labelText: 'State'),
+                      decoration: const InputDecoration(labelText: 'Province / Territory'),
                     ),
                   ),
                 ],
@@ -102,7 +111,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: zipCtrl,
-                decoration: const InputDecoration(labelText: 'Zip / Postal Code'),
+                decoration: const InputDecoration(labelText: 'Postal Code'),
+                keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -122,13 +132,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       city: cityCtrl.text.trim(),
                       state: stateCtrl.text.trim(),
                       zipCode: zipCtrl.text.trim(),
-                      country: 'United States',
+                      country: 'Pakistan',
                       isDefault: true,
                     );
                     ref.read(addressesProvider.notifier).addAddress(newAddr);
                     Navigator.pop(ctx);
                   },
-                  child: const Text('Save Address'),
+                  child: const Text('Save Delivery Address'),
                 ),
               ),
             ],
@@ -146,7 +156,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final subtotal = ref.watch(cartProvider.notifier).subtotal;
     final coupon = ref.watch(appliedCouponProvider);
     final discount = ref.watch(cartProvider.notifier).calculateDiscount(coupon);
-    final shipping = subtotal > 100 || subtotal == 0 ? 0.0 : 12.0;
+    final shipping = subtotal >= 3000 || subtotal == 0 ? 0.0 : 250.0;
     final total = (subtotal - discount + shipping).clamp(0.0, double.infinity);
 
     final addresses = ref.watch(addressesProvider);
@@ -209,10 +219,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'HOME',
+                                'DELIVERY LOCATION',
                                 style: TextStyle(
                                   color: theme.colorScheme.primary,
-                                  fontSize: 10,
+                                  fontSize: 9.5,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -260,7 +270,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 itemBuilder: (context, index) {
                   final item = cartItems[index];
                   return Container(
-                    width: 220,
+                    width: 240,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
@@ -293,7 +303,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${item.quantity}x • \$${item.product.price.toStringAsFixed(2)}',
+                                '${item.quantity}x • ${CurrencyFormat.format(item.product.price)}',
                                 style: TextStyle(
                                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                                   fontSize: 12,
@@ -301,7 +311,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '\$${item.subtotal.toStringAsFixed(2)}',
+                                CurrencyFormat.format(item.subtotal),
                                 style: TextStyle(
                                   color: theme.colorScheme.primary,
                                   fontWeight: FontWeight.bold,
@@ -334,6 +344,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             Column(
               children: _paymentMethods.map((method) {
                 final isSelected = _selectedPayment == method['id'];
+                final isPopular = method['isPopular'] as bool? ?? false;
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
@@ -363,10 +375,33 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  method['title'] as String,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                Row(
+                                  children: [
+                                    Text(
+                                      method['title'] as String,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    if (isPopular) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'POPULAR',
+                                          style: TextStyle(
+                                            color: Color(0xFF047857),
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
                                   method['subtitle'] as String,
                                   style: TextStyle(
@@ -427,17 +462,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 14),
-                  _buildSummaryRow('Subtotal', '\$${subtotal.toStringAsFixed(2)}', theme),
+                  _buildSummaryRow('Subtotal', CurrencyFormat.format(subtotal), theme),
                   if (discount > 0)
                     _buildSummaryRow(
                       'Coupon Discount',
-                      '-\$${discount.toStringAsFixed(2)}',
+                      '-${CurrencyFormat.format(discount)}',
                       theme,
                       color: const Color(0xFF10B981),
                     ),
                   _buildSummaryRow(
                     'Delivery Fee',
-                    shipping == 0 ? 'FREE' : '\$${shipping.toStringAsFixed(2)}',
+                    shipping == 0 ? 'FREE' : CurrencyFormat.format(shipping),
                     theme,
                     color: shipping == 0 ? const Color(0xFF10B981) : null,
                   ),
@@ -450,7 +485,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '\$${total.toStringAsFixed(2)}',
+                        CurrencyFormat.format(total),
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: theme.colorScheme.primary,
@@ -527,7 +562,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Order ID: $newOrderId\nWe have sent an order confirmation to your email.',
+                            'Order ID: $newOrderId\nTotal: ${CurrencyFormat.format(total)}\nPayment: $_selectedPayment\nEst. Delivery: 2-4 business days via TCS Courier',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -565,7 +600,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   );
                 },
                 icon: const Icon(Icons.lock_outline, size: 18),
-                label: Text('Place Order • \$${total.toStringAsFixed(2)}'),
+                label: Text('Place Order • ${CurrencyFormat.format(total)}'),
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../providers/app_providers.dart';
 import '../screens/product_details_screen.dart';
+import '../core/currency_format.dart';
 import 'custom_image.dart';
 
 class ProductCard extends ConsumerWidget {
@@ -15,12 +16,134 @@ class ProductCard extends ConsumerWidget {
     this.width,
   });
 
+  Widget? _buildBadge(Product product) {
+    if (product.discountPercentage > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          '${product.discountPercentage}% OFF',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+          ),
+        ),
+      );
+    } else if (product.reviewCount > 1500) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF59E0B),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Text(
+          'Best Seller',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    } else if (product.availableStock <= 35) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEA580C),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEA580C).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Text(
+          'Low Stock',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    } else if (product.rating >= 4.8) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF6366F1),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Text(
+          'Top Rated',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    } else if (product.isFeatured) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10B981),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Text(
+          'Popular',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final wishlist = ref.watch(wishlistProvider);
     final bool inWishlist = wishlist.any((p) => p.id == product.id);
+    final badgeWidget = _buildBadge(product);
 
     return GestureDetector(
       onTap: () {
@@ -52,7 +175,7 @@ class ProductCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TOP: Image + Favorite Button + Discount Badge
+            // TOP: Image + Favorite Button + Smart Badge
             AspectRatio(
               aspectRatio: 1.25,
               child: Stack(
@@ -62,33 +185,12 @@ class ProductCard extends ConsumerWidget {
                     imageUrl: product.image,
                     fit: BoxFit.cover,
                   ),
-                  // Discount Badge
-                  if (product.discountPercentage > 0)
+                  // Smart Badge
+                  if (badgeWidget != null)
                     Positioned(
-                      top: 6,
-                      left: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444),
-                          borderRadius: BorderRadius.circular(5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          '-${product.discountPercentage}%',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
+                      top: 7,
+                      left: 7,
+                      child: badgeWidget,
                     ),
                   // Favorite Button
                   Positioned(
@@ -210,7 +312,7 @@ class ProductCard extends ConsumerWidget {
                             children: [
                               if (product.oldPrice != null && product.oldPrice! > product.price)
                                 Text(
-                                  '\$${product.oldPrice!.toStringAsFixed(2)}',
+                                  CurrencyFormat.format(product.oldPrice!),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -220,13 +322,13 @@ class ProductCard extends ConsumerWidget {
                                   ),
                                 ),
                               Text(
-                                '\$${product.price.toStringAsFixed(2)}',
+                                CurrencyFormat.format(product.price),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w800,
                                   color: theme.colorScheme.primary,
-                                  fontSize: 14,
+                                  fontSize: 13.5,
                                 ),
                               ),
                             ],

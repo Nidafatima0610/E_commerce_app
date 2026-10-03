@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../providers/app_providers.dart';
+import '../core/currency_format.dart';
 import '../widgets/custom_image.dart';
 import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
+import 'product_compare_screen.dart';
 
 class ProductDetailsScreen extends ConsumerStatefulWidget {
   final Product product;
@@ -43,6 +45,101 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     return cat == 'fashion' || cat == 'shoes';
   }
 
+  void _showSizeGuide(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Size & Measurement Guide',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Table(
+                  border: TableBorder.all(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  children: const [
+                    TableRow(
+                      decoration: BoxDecoration(color: Color(0xFFF1F5F9)),
+                      children: [
+                        Padding(padding: EdgeInsets.all(8), child: Text('Size', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87))),
+                        Padding(padding: EdgeInsets.all(8), child: Text('Chest / Length', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87))),
+                        Padding(padding: EdgeInsets.all(8), child: Text('Shoes (PK/EU)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87))),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        Padding(padding: EdgeInsets.all(8), child: Text('S (Small)')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('36" - 38"')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('39 - 40')),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        Padding(padding: EdgeInsets.all(8), child: Text('M (Medium)')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('39" - 41"')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('41 - 42')),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        Padding(padding: EdgeInsets.all(8), child: Text('L (Large)')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('42" - 44"')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('43 - 44')),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        Padding(padding: EdgeInsets.all(8), child: Text('XL (Extra Large)')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('45" - 48"')),
+                        Padding(padding: EdgeInsets.all(8), child: Text('45 - 46')),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '• Standard Pakistani fitting with comfortable stretch\n• Hassle-free 7-day size exchange available across Pakistan',
+                  style: TextStyle(color: Colors.grey, fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -64,6 +161,18 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
         title: Text(widget.product.brand),
         actions: [
           IconButton(
+            icon: const Icon(Icons.compare_arrows_rounded),
+            tooltip: 'Compare Product',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProductCompareScreen(initialProduct: widget.product),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: Icon(
               inWishlist ? Icons.favorite : Icons.favorite_border,
               color: inWishlist ? const Color(0xFFEF4444) : null,
@@ -84,9 +193,9 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
             icon: const Icon(Icons.share_outlined),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Product link copied to clipboard'),
-                  duration: Duration(milliseconds: 1200),
+                SnackBar(
+                  content: Text('Product link for "${widget.product.name}" copied!'),
+                  duration: const Duration(milliseconds: 1200),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -149,7 +258,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Brand & Category
+                  // Brand & Category & Compare shortcut
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -242,7 +351,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                         ),
                       ),
                       Text(
-                        '${widget.product.reviewCount} verified reviews',
+                        '${widget.product.reviewCount} verified ratings',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
@@ -251,14 +360,14 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Price & Discount
+                  // Price & Discount in Pakistani Rupees
                   Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 10,
                     runSpacing: 6,
                     children: [
                       Text(
-                        '\$${widget.product.price.toStringAsFixed(2)}',
+                        CurrencyFormat.format(widget.product.price),
                         style: theme.textTheme.headlineMedium?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w800,
@@ -266,7 +375,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       ),
                       if (widget.product.oldPrice != null && widget.product.oldPrice! > widget.product.price) ...[
                         Text(
-                          '\$${widget.product.oldPrice!.toStringAsFixed(2)}',
+                          CurrencyFormat.format(widget.product.oldPrice!),
                           style: theme.textTheme.titleMedium?.copyWith(
                             decoration: TextDecoration.lineThrough,
                             color: Colors.grey,
@@ -339,12 +448,25 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           'Select Size',
                           style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        Text(
-                          'Size Guide',
-                          style: TextStyle(
-                            color: theme.colorScheme.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                        InkWell(
+                          onTap: () => _showSizeGuide(context),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              children: [
+                                Icon(Icons.straighten_outlined, size: 16, color: theme.colorScheme.primary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Size Guide',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -448,10 +570,11 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   const SizedBox(height: 12),
                   _buildSpecRow(theme, 'Brand', widget.product.brand),
                   _buildSpecRow(theme, 'Category', widget.product.category),
-                  _buildSpecRow(theme, 'Product SKU', '#${widget.product.id.toUpperCase()}'),
-                  _buildSpecRow(theme, 'Warranty', '1 Year Official Manufacturer Warranty'),
-                  _buildSpecRow(theme, 'Shipping', 'Free Standard Delivery (2-4 business days)'),
-                  _buildSpecRow(theme, 'Returns', '30 Days Money Back / Exchange Guarantee'),
+                  _buildSpecRow(theme, 'SKU Code', '#${widget.product.id.toUpperCase()}'),
+                  _buildSpecRow(theme, 'Warranty', '1 Year Official Brand Warranty'),
+                  _buildSpecRow(theme, 'Delivery', 'TCS / Leopards Courier (2-4 business days)'),
+                  _buildSpecRow(theme, 'Cash on Delivery', 'Available nationwide'),
+                  _buildSpecRow(theme, 'Returns', '7 Days Hassle-Free Exchange / Return'),
                   const Divider(height: 32),
 
                   // ==================== 8. RELATED PRODUCTS ====================
@@ -487,7 +610,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
       // ==================== 9. FIXED BOTTOM ACTION BAR ====================
       bottomNavigationBar: SafeArea(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             boxShadow: [
@@ -506,24 +629,29 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
           child: Row(
             children: [
               // Total Price
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Total Price',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-                  ),
-                  Text(
-                    '\$${(widget.product.price * _quantity).toStringAsFixed(2)}',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.primary,
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Price',
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey, fontSize: 11),
                     ),
-                  ),
-                ],
+                    Text(
+                      CurrencyFormat.format(widget.product.price * _quantity),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.primary,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
 
               // Add To Cart Button
               Expanded(
@@ -549,11 +677,14 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
-                  label: const Text('Add to Cart'),
+                  icon: const Icon(Icons.add_shopping_cart_rounded, size: 16),
+                  label: const Text('Add to Cart', style: TextStyle(fontSize: 12.5)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
 
               // Buy Now Button
               Expanded(
@@ -567,7 +698,10 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       MaterialPageRoute(builder: (context) => const CheckoutScreen()),
                     );
                   },
-                  child: const Text('Buy Now'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  ),
+                  child: const Text('Buy Now', style: TextStyle(fontSize: 12.5)),
                 ),
               ),
             ],
@@ -584,7 +718,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: 120,
             child: Text(
               label,
               style: theme.textTheme.bodyMedium?.copyWith(
