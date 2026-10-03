@@ -5,6 +5,7 @@ import '../providers/app_providers.dart';
 import '../screens/product_details_screen.dart';
 import '../core/currency_format.dart';
 import 'product_image.dart';
+import 'quick_add_modal.dart';
 
 class ProductCard extends ConsumerWidget {
   final Product product;
@@ -358,15 +359,25 @@ class ProductCard extends ConsumerWidget {
                             onTap: product.isOutOfStock
                                 ? null
                                 : () {
-                                    ref.read(cartProvider.notifier).addItem(product);
-                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Added ${product.name} to cart'),
-                                        duration: const Duration(milliseconds: 1400),
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
+                                    if (product.hasVariants) {
+                                      QuickAddModal.show(context, product);
+                                    } else {
+                                      ref.read(cartProvider.notifier).addItem(product);
+                                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Added ${product.name} to cart'),
+                                          duration: const Duration(milliseconds: 2000),
+                                          behavior: SnackBarBehavior.floating,
+                                          action: SnackBarAction(
+                                            label: 'View Cart',
+                                            onPressed: () {
+                                              ref.read(bottomNavIndexProvider.notifier).setIndex(2);
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    }
                                   },
                             borderRadius: BorderRadius.circular(8),
                             child: const Padding(

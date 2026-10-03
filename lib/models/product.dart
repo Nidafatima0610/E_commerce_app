@@ -20,6 +20,7 @@ class Product {
   final bool isDeal;
   final List<String> colors;
   final List<String> sizes;
+  final List<String> storageOptions;
   final List<String> tags;
   final Map<String, String> specifications;
   final String deliveryInfo;
@@ -51,6 +52,7 @@ class Product {
     this.isDeal = false,
     this.colors = const [],
     this.sizes = const [],
+    this.storageOptions = const [],
     this.tags = const [],
     this.specifications = const {},
     this.deliveryInfo = 'Estimated delivery: 2–4 business days across Pakistan',
@@ -87,6 +89,22 @@ class Product {
   String get formattedPrice => CurrencyFormat.format(price);
   String? get formattedOldPrice => oldPrice != null ? CurrencyFormat.format(oldPrice!) : null;
 
+  bool get hasVariants => colors.isNotEmpty || sizes.isNotEmpty || storageOptions.isNotEmpty;
+
+  double getPriceForVariants({String? storage, String? size}) {
+    double currentPrice = price;
+    if (storage != null && storage.isNotEmpty) {
+      if (storage == '256GB' && !name.contains('256GB')) {
+        currentPrice += 20000;
+      } else if (storage == '512GB' && !name.contains('512GB')) {
+        currentPrice += 45000;
+      } else if (storage == '1TB' && !name.contains('1TB')) {
+        currentPrice += 90000;
+      }
+    }
+    return currentPrice;
+  }
+
   Product copyWith({
     String? id,
     String? name,
@@ -107,6 +125,7 @@ class Product {
     bool? isDeal,
     List<String>? colors,
     List<String>? sizes,
+    List<String>? storageOptions,
     List<String>? tags,
     Map<String, String>? specifications,
     String? deliveryInfo,
@@ -138,6 +157,7 @@ class Product {
       isDeal: isDeal ?? this.isDeal,
       colors: colors ?? this.colors,
       sizes: sizes ?? this.sizes,
+      storageOptions: storageOptions ?? this.storageOptions,
       tags: tags ?? this.tags,
       specifications: specifications ?? this.specifications,
       deliveryInfo: deliveryInfo ?? this.deliveryInfo,
@@ -172,6 +192,7 @@ class Product {
       'isDeal': isDeal,
       'colors': colors,
       'sizes': sizes,
+      'storageOptions': storageOptions,
       'tags': tags,
       'specifications': specifications,
       'deliveryInfo': deliveryInfo,
@@ -206,6 +227,7 @@ class Product {
       isDeal: map['isDeal'] ?? false,
       colors: List<String>.from(map['colors'] ?? []),
       sizes: List<String>.from(map['sizes'] ?? []),
+      storageOptions: List<String>.from(map['storageOptions'] ?? []),
       tags: List<String>.from(map['tags'] ?? []),
       specifications: Map<String, String>.from(map['specifications'] ?? {}),
       deliveryInfo: map['deliveryInfo'] ?? 'Estimated delivery: 2–4 business days across Pakistan',

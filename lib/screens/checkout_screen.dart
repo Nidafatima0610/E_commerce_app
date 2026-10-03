@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/address.dart';
+import '../models/cart_item.dart';
 import '../providers/app_providers.dart';
 import '../core/currency_format.dart';
 import '../widgets/custom_image.dart';
 import 'order_history_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
-  const CheckoutScreen({super.key});
+  final List<CartItem>? directCheckoutItems;
+
+  const CheckoutScreen({super.key, this.directCheckoutItems});
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -152,11 +155,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cartItems = ref.watch(cartProvider);
-    final subtotal = ref.watch(cartProvider.notifier).subtotal;
-    final coupon = ref.watch(appliedCouponProvider);
-    final discount = ref.watch(cartProvider.notifier).calculateDiscount(coupon);
-    final shipping = subtotal >= 3000 || subtotal == 0 ? 0.0 : 250.0;
+    final isDirect = widget.directCheckoutItems != null && widget.directCheckoutItems!.isNotEmpty;
+    final checkoutItems = isDirect ? widget.directCheckoutItems! : ref.watch(cartProvider);
+    final subtotal = isDirect
+        ? checkoutItems.fold(0.0, (sum, i) => sum + i.subtotal)
+        : ref.watch(cartProvider.notifier).subtotal;
+    final coupon = isDirect ? null : ref.watch(appliedCouponProvider);
+    final discount = isDirect ? 0.0 : ref.watch(cartProvider.notifier).calculateDiscount(coupon);
+    final shipping = (subtotal >= 2999 || subtotal == 0) ? 0.0 : 250.0;
     final total = (subtotal - discount + shipping).clamp(0.0, double.infinity);
 
     final addresses = ref.watch(addressesProvider);
@@ -255,22 +261,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary, size: 22),
                 const SizedBox(width: 8),
                 Text(
-                  'Order Items (${cartItems.length})',
+                  'Order Items (${checkoutItems.length})',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 100,
+              height: 105,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: cartItems.length,
+                itemCount: checkoutItems.length,
                 separatorBuilder: (context, index) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
-                  final item = cartItems[index];
+                  final item = checkoutItems[index];
                   return Container(
-                    width: 240,
+                    width: 250,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
@@ -301,12 +307,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                               ),
+                              if (item.variantDescription.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.variantDescription,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primary,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 2),
                               Text(
-                                '${item.quantity}x • ${CurrencyFormat.format(item.product.price)}',
+                                '${item.quantity}x • ${CurrencyFormat.format(item.unitPrice)}',
                                 style: TextStyle(
                                   color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -514,10 +533,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     return;
                   }
 
-                  if (cartItems.isEmpty) {
+                  if (checkoutItems.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Your cart is empty'),
+                        content: Text('No items to checkout'),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -526,13 +545,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
                   final newOrderId = 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
                   ref.read(ordersProvider.notifier).addOrder(
-                    cartItems,
+                    checkoutItems,
                     total,
                     address: defaultAddress,
                     paymentMethod: _selectedPayment,
                   );
-                  ref.read(cartProvider.notifier).clearCart();
-                  ref.read(appliedCouponProvider.notifier).update(null);
+                  if (!isDirect) {
+                    ref.read(cartProvider.notifier).clearCart();
+                    ref.read(appliedCouponProvider.notifier).update(null);
+                  }
 
                   showDialog(
                     context: context,

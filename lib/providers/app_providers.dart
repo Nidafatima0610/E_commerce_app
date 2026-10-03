@@ -163,22 +163,46 @@ class CartNotifier extends Notifier<List<CartItem>> {
     repo.saveCart(state);
   }
 
-  void addItem(Product product, {int quantity = 1}) {
-    final existingIndex = state.indexWhere((item) => item.product.id == product.id);
+  void addItem(
+    Product product, {
+    int quantity = 1,
+    String? selectedColor,
+    String? selectedSize,
+    String? selectedStorage,
+    String? selectedVariant,
+    double? unitPrice,
+  }) {
+    final effectivePrice = unitPrice ?? product.price;
+    final existingIndex = state.indexWhere((item) =>
+        item.product.id == product.id &&
+        (item.selectedColor ?? '') == (selectedColor ?? '') &&
+        (item.selectedSize ?? '') == (selectedSize ?? '') &&
+        (item.selectedStorage ?? '') == (selectedStorage ?? '') &&
+        (item.selectedVariant ?? '') == (selectedVariant ?? ''));
+
     if (existingIndex >= 0) {
       final updatedCart = List<CartItem>.from(state);
-      updatedCart[existingIndex] = updatedCart[existingIndex].copyWith(
-        quantity: updatedCart[existingIndex].quantity + quantity,
+      final current = updatedCart[existingIndex];
+      final newQty = (current.quantity + quantity).clamp(1, product.availableStock);
+      updatedCart[existingIndex] = current.copyWith(
+        quantity: newQty,
+        unitPrice: effectivePrice,
       );
       state = updatedCart;
     } else {
+      final newQty = quantity.clamp(1, product.availableStock);
       state = [
         ...state,
         CartItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          id: '${product.id}_${DateTime.now().millisecondsSinceEpoch}',
           product: product,
-          quantity: quantity,
-        )
+          quantity: newQty,
+          selectedColor: selectedColor,
+          selectedSize: selectedSize,
+          selectedStorage: selectedStorage,
+          selectedVariant: selectedVariant,
+          unitPrice: effectivePrice,
+        ),
       ];
     }
     _saveCart();
@@ -189,16 +213,24 @@ class CartNotifier extends Notifier<List<CartItem>> {
     _saveCart();
   }
 
-  void updateQuantity(String id, int quantity) {
+  bool updateQuantity(String id, int quantity) {
     if (quantity <= 0) {
       removeItem(id);
-      return;
+      return true;
     }
-    state = [
-      for (final item in state)
-        if (item.id == id) item.copyWith(quantity: quantity) else item
-    ];
-    _saveCart();
+    final itemIndex = state.indexWhere((item) => item.id == id);
+    if (itemIndex >= 0) {
+      final item = state[itemIndex];
+      if (quantity > item.product.availableStock) {
+        return false;
+      }
+      final updated = List<CartItem>.from(state);
+      updated[itemIndex] = item.copyWith(quantity: quantity);
+      state = updated;
+      _saveCart();
+      return true;
+    }
+    return false;
   }
 
   void clearCart() {
@@ -206,7 +238,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
     _saveCart();
   }
 
-  double get subtotal => state.fold(0, (total, item) => total + item.subtotal);
+  double get subtotal => state.fold(0.0, (total, item) => total + item.subtotal);
   int get itemCount => state.fold(0, (total, item) => total + item.quantity);
 
   double calculateDiscount(Coupon? coupon) {
@@ -224,9 +256,9 @@ final cartProvider = NotifierProvider<CartNotifier, List<CartItem>>(() {
 });
 
 // Save For Later Provider
-class SavedForLaterNotifier extends Notifier<List<Product>> {
+class SavedForLaterNotifier extends Notifier<List<CartItem>> {
   @override
-  List<Product> build() {
+  List<CartItem> build() {
     _loadSaved();
     return [];
   }
@@ -243,28 +275,34 @@ class SavedForLaterNotifier extends Notifier<List<Product>> {
   }
 
   void saveForLater(CartItem cartItem) {
-    // Add to saved for later
-    if (!state.any((p) => p.id == cartItem.product.id)) {
-      state = [...state, cartItem.product];
+    if (!state.any((item) => item.id == cartItem.id || (item.product.id == cartItem.product.id && item.variantDescription == cartItem.variantDescription))) {
+      state = [...state, cartItem];
       _persist();
     }
-    // Remove from cart
     ref.read(cartProvider.notifier).removeItem(cartItem.id);
   }
 
-  void moveToCart(Product product) {
-    state = state.where((p) => p.id != product.id).toList();
+  void moveToCart(CartItem item) {
+    state = state.where((i) => i.id != item.id).toList();
     _persist();
-    ref.read(cartProvider.notifier).addItem(product);
+    ref.read(cartProvider.notifier).addItem(
+      item.product,
+      quantity: item.quantity,
+      selectedColor: item.selectedColor,
+      selectedSize: item.selectedSize,
+      selectedStorage: item.selectedStorage,
+      selectedVariant: item.selectedVariant,
+      unitPrice: item.unitPrice,
+    );
   }
 
-  void removeSaved(String productId) {
-    state = state.where((p) => p.id != productId).toList();
+  void removeSaved(String itemId) {
+    state = state.where((item) => item.id != itemId && item.product.id != itemId).toList();
     _persist();
   }
 }
 
-final savedForLaterProvider = NotifierProvider<SavedForLaterNotifier, List<Product>>(() {
+final savedForLaterProvider = NotifierProvider<SavedForLaterNotifier, List<CartItem>>(() {
   return SavedForLaterNotifier();
 });
 
@@ -282,10 +320,10 @@ class RecentlyViewedNotifier extends Notifier<List<Product>> {
     final products = ref.read(productsProvider);
     final data = storage.getJson('recently_viewed');
     if (data != null && data is List && products.isNotEmpty) {
-      state = data.map((id) => products.firstWhere(
-        (p) => p.id == id,
-        orElse: () => products.first,
-      )).toList();
+      state = data
+          .map((id) => products.where((p) => p.id == id).firstOrNull)
+          .whereType<Product>()
+          .toList();
     }
   }
 
@@ -296,6 +334,11 @@ class RecentlyViewedNotifier extends Notifier<List<Product>> {
     if (current.length > 15) current = current.sublist(0, 15);
     state = current;
     storage.saveJson('recently_viewed', state.map((p) => p.id).toList());
+  }
+
+  void removeProduct(String id) {
+    state = state.where((p) => p.id != id).toList();
+    ref.read(storageServiceProvider).saveJson('recently_viewed', state.map((p) => p.id).toList());
   }
 
   void clear() {
@@ -334,6 +377,11 @@ class WishlistNotifier extends Notifier<List<Product>> {
     } else {
       state = [...state, product];
     }
+    _saveWishlist();
+  }
+
+  void removeFromWishlist(String productId) {
+    state = state.where((p) => p.id != productId).toList();
     _saveWishlist();
   }
 

@@ -273,6 +273,19 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                                       fontSize: 13,
                                                     ),
                                                   ),
+                                                  if (item.variantDescription.isNotEmpty) ...[
+                                                    const SizedBox(height: 3),
+                                                    Text(
+                                                      item.variantDescription,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        color: theme.colorScheme.primary,
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ],
                                               ),
                                             ),
@@ -293,7 +306,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
-                                              CurrencyFormat.format(item.product.price),
+                                              CurrencyFormat.format(item.unitPrice),
                                               style: TextStyle(
                                                 color: isDark ? Colors.grey[400] : Colors.grey[600],
                                                 fontSize: 12,
@@ -329,8 +342,16 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                                   ),
                                                   InkWell(
                                                     onTap: () {
-                                                      if (item.quantity < item.product.availableStock) {
-                                                        ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
+                                                      final success = ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
+                                                      if (!success) {
+                                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('Cannot add more. Only ${item.product.availableStock} in stock.'),
+                                                            duration: const Duration(seconds: 1),
+                                                            behavior: SnackBarBehavior.floating,
+                                                          ),
+                                                        );
                                                       }
                                                     },
                                                     borderRadius: BorderRadius.circular(6),
@@ -513,7 +534,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       itemCount: savedItems.length,
                       separatorBuilder: (context, index) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
-                        final product = savedItems[index];
+                        final item = savedItems[index];
                         return Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
@@ -531,8 +552,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   width: 65,
                                   height: 65,
                                   child: ProductImage(
-                                    imageUrl: product.image,
-                                    category: product.category,
+                                    imageUrl: item.product.image,
+                                    category: item.product.category,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -543,14 +564,27 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      product.name,
+                                      item.product.name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                     ),
+                                    if (item.variantDescription.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        item.variantDescription,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: theme.colorScheme.primary,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 4),
                                     Text(
-                                      CurrencyFormat.format(product.price),
+                                      CurrencyFormat.format(item.unitPrice),
                                       style: TextStyle(
                                         color: theme.colorScheme.primary,
                                         fontWeight: FontWeight.bold,
@@ -562,10 +596,10 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  ref.read(savedForLaterProvider.notifier).moveToCart(product);
+                                  ref.read(savedForLaterProvider.notifier).moveToCart(item);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Moved ${product.name} back to cart'),
+                                      content: Text('Moved ${item.product.name} back to cart'),
                                       duration: const Duration(seconds: 1),
                                       behavior: SnackBarBehavior.floating,
                                     ),
@@ -576,7 +610,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               IconButton(
                                 icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
                                 onPressed: () {
-                                  ref.read(savedForLaterProvider.notifier).removeSaved(product.id);
+                                  ref.read(savedForLaterProvider.notifier).removeSaved(item.id);
                                 },
                               ),
                             ],
@@ -685,6 +719,35 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
+                          if (cartItems.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Your cart is empty. Add products to continue.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+                          for (final item in cartItems) {
+                            if (item.quantity > item.product.availableStock) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Quantity for "${item.product.name}" exceeds available stock (${item.product.availableStock} left). Please adjust.'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+                            if (item.product.isOutOfStock) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('"${item.product.name}" is out of stock. Please remove it from cart.'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const CheckoutScreen()),

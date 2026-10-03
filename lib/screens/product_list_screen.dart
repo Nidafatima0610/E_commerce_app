@@ -46,6 +46,8 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
   String? _selectedBrand;
   bool _onlyInStock = false;
   double _maxPriceFilter = 450000.0;
+  double _minRatingFilter = 0.0;
+  double _minDiscountFilter = 0.0;
   ProductSortOption _sortOption = ProductSortOption.featured;
 
   @override
@@ -61,6 +63,8 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       _selectedBrand = null;
       _onlyInStock = false;
       _maxPriceFilter = 450000.0;
+      _minRatingFilter = 0.0;
+      _minDiscountFilter = 0.0;
       _sortOption = ProductSortOption.featured;
     });
   }
@@ -145,6 +149,82 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                     ),
                     const SizedBox(height: 12),
 
+                    // Rating filter
+                    const Text('Minimum Rating', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Any'),
+                          selected: _minRatingFilter == 0.0,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setModalState(() => _minRatingFilter = 0.0);
+                              setState(() => _minRatingFilter = 0.0);
+                            }
+                          },
+                        ),
+                        ChoiceChip(
+                          label: const Text('4.5★ & up'),
+                          selected: _minRatingFilter == 4.5,
+                          onSelected: (selected) {
+                            final val = selected ? 4.5 : 0.0;
+                            setModalState(() => _minRatingFilter = val);
+                            setState(() => _minRatingFilter = val);
+                          },
+                        ),
+                        ChoiceChip(
+                          label: const Text('4.0★ & up'),
+                          selected: _minRatingFilter == 4.0,
+                          onSelected: (selected) {
+                            final val = selected ? 4.0 : 0.0;
+                            setModalState(() => _minRatingFilter = val);
+                            setState(() => _minRatingFilter = val);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Discount filter
+                    const Text('Discount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('All Discounts'),
+                          selected: _minDiscountFilter == 0.0,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setModalState(() => _minDiscountFilter = 0.0);
+                              setState(() => _minDiscountFilter = 0.0);
+                            }
+                          },
+                        ),
+                        ChoiceChip(
+                          label: const Text('10%+ Off'),
+                          selected: _minDiscountFilter == 10.0,
+                          onSelected: (selected) {
+                            final val = selected ? 10.0 : 0.0;
+                            setModalState(() => _minDiscountFilter = val);
+                            setState(() => _minDiscountFilter = val);
+                          },
+                        ),
+                        ChoiceChip(
+                          label: const Text('20%+ Off'),
+                          selected: _minDiscountFilter == 20.0,
+                          onSelected: (selected) {
+                            final val = selected ? 20.0 : 0.0;
+                            setModalState(() => _minDiscountFilter = val);
+                            setState(() => _minDiscountFilter = val);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
                     // Brands
                     if (sortedBrands.isNotEmpty) ...[
                       const Text(
@@ -223,6 +303,14 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       list = list.where((p) => p.availableStock > 0).toList();
     }
 
+    if (_minRatingFilter > 0) {
+      list = list.where((p) => p.rating >= _minRatingFilter).toList();
+    }
+
+    if (_minDiscountFilter > 0) {
+      list = list.where((p) => p.discountPercentage >= _minDiscountFilter).toList();
+    }
+
     list = list.where((p) => p.price <= _maxPriceFilter).toList();
 
     // Sort
@@ -253,6 +341,16 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     return sorted;
   }
 
+  int get _activeFilterCount {
+    int count = 0;
+    if (_maxPriceFilter < 450000.0) count++;
+    if (_onlyInStock) count++;
+    if (_selectedBrand != null) count++;
+    if (_minRatingFilter > 0) count++;
+    if (_minDiscountFilter > 0) count++;
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -277,10 +375,32 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.tune_rounded),
-            tooltip: 'Filter',
-            onPressed: () => _showFilterModal(context, allProducts),
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.tune_rounded),
+                tooltip: 'Filter',
+                onPressed: () => _showFilterModal(context, allProducts),
+              ),
+              if (_activeFilterCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '$_activeFilterCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.search),

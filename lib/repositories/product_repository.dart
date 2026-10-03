@@ -66,33 +66,68 @@ class LocalProductRepository implements ProductRepository {
   @override
   List<Product> getRecommendedProducts({String? preferredCategory, List<String>? viewedIds, int limit = 10}) {
     final viewedSet = viewedIds?.toSet() ?? <String>{};
+    final candidates = _products.where((p) => !viewedSet.contains(p.id)).toList();
 
-    if (preferredCategory != null && preferredCategory.isNotEmpty) {
-      final preferred = _products
-          .where((p) => p.category.toLowerCase() == preferredCategory.toLowerCase() && !viewedSet.contains(p.id))
-          .toList();
-      if (preferred.length >= limit) {
-        return preferred.sublist(0, limit);
-      }
-      final remaining = _products
-          .where((p) => p.category.toLowerCase() != preferredCategory.toLowerCase() && !viewedSet.contains(p.id))
-          .toList();
-      final combined = [...preferred, ...remaining];
-      return combined.take(limit).toList();
+    final complementaryMap = {
+      'Electronics': ['Mobiles', 'Watches'],
+      'Mobiles': ['Electronics', 'Watches', 'Bags & Accessories'],
+      'Fashion': ['Shoes', 'Watches', 'Bags & Accessories'],
+      'Shoes': ['Sports & Fitness', 'Fashion'],
+      'Watches': ['Fashion', 'Electronics', 'Bags & Accessories'],
+      'Bags & Accessories': ['Travel Gear', 'Fashion', 'Mobiles'],
+      'Beauty & Care': ['Fashion', 'Home & Living'],
+      'Home & Living': ['Electronics', 'Beauty & Care'],
+      'Sports & Fitness': ['Shoes', 'Watches', 'Electronics'],
+    };
+
+    if (preferredCategory != null && preferredCategory.isNotEmpty && preferredCategory != 'All') {
+      final compList = complementaryMap[preferredCategory] ?? [];
+      final scored = candidates.map((p) {
+        double score = p.rating * 10;
+        if (p.category.toLowerCase() == preferredCategory.toLowerCase()) {
+          score += 50;
+        } else if (compList.contains(p.category)) {
+          score += 25;
+        }
+        if (p.isBestseller) score += 15;
+        if (p.isDeal) score += 10;
+        return MapEntry(p, score);
+      }).toList();
+
+      scored.sort((a, b) => b.value.compareTo(a.value));
+      return scored.map((e) => e.key).take(limit).toList();
     }
 
-    // Default recommendation: blend of top rated and featured items
-    final list = List<Product>.from(_products);
-    list.sort((a, b) => (b.rating * b.reviewCount).compareTo(a.rating * a.reviewCount));
+    final list = List<Product>.from(candidates.isNotEmpty ? candidates : _products);
+    list.sort((a, b) => ((b.rating * b.reviewCount) + (b.isBestseller ? 500 : 0)).compareTo((a.rating * a.reviewCount) + (a.isBestseller ? 500 : 0)));
     return list.take(limit).toList();
   }
 
   @override
   List<Product> getRelatedProducts(Product product, {int limit = 6}) {
-    return _products
-        .where((p) => p.id != product.id && (p.category == product.category || p.brand == product.brand))
-        .take(limit)
-        .toList();
+    final candidates = _products.where((p) => p.id != product.id).toList();
+
+    final scored = candidates.map((p) {
+      int score = 0;
+      if (p.subcategory.isNotEmpty && p.subcategory.toLowerCase() == product.subcategory.toLowerCase()) {
+        score += 8;
+      }
+      if (p.category.toLowerCase() == product.category.toLowerCase()) {
+        score += 5;
+      }
+      if (p.brand.isNotEmpty && p.brand != 'General' && p.brand.toLowerCase() == product.brand.toLowerCase()) {
+        score += 4;
+      }
+      final sharedTags = p.tags.toSet().intersection(product.tags.toSet());
+      score += sharedTags.length * 2;
+      return MapEntry(p, score);
+    }).where((e) => e.value > 0).toList();
+
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    final result = scored.map((e) => e.key).take(limit).toList();
+    if (result.isNotEmpty) return result;
+
+    return candidates.where((p) => p.category == product.category).take(limit).toList();
   }
 
   @override

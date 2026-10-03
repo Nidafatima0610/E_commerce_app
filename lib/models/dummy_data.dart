@@ -340,6 +340,7 @@ final List<Product> dummyProducts = [
     images: [
       'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&q=80',
       'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=800&q=80',
+      'https://images.unsplash.com/photo-1565849904461-04a58ad377e0?w=800&q=80',
     ],
     rating: 4.9,
     reviewCount: 2450,
@@ -350,6 +351,7 @@ final List<Product> dummyProducts = [
     isDeal: true,
     colors: ['#78716C', '#0F172A', '#F5F5F4'],
     sizes: [],
+    storageOptions: ['128GB', '256GB', '512GB', '1TB'],
     tags: ['apple', 'iphone', 'iphone 15 pro max', 'titanium', 'smartphone', 'flagship'],
     specifications: {
       'Processor': 'Apple A17 Pro 3nm',
@@ -372,6 +374,10 @@ final List<Product> dummyProducts = [
     price: 389999.0,
     oldPrice: 419999.0,
     image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=800&q=80',
+      'https://images.unsplash.com/photo-1580910051074-3eb694886505?w=800&q=80',
+    ],
     rating: 4.8,
     reviewCount: 1840,
     availableStock: 24,
@@ -381,6 +387,7 @@ final List<Product> dummyProducts = [
     isDeal: true,
     colors: ['#0F172A', '#94A3B8'],
     sizes: [],
+    storageOptions: ['256GB', '512GB', '1TB'],
     tags: ['samsung', 'galaxy s24 ultra', 'galaxy ai', 's pen', '5g', 'flagship'],
     specifications: {
       'Processor': 'Snapdragon 8 Gen 3 for Galaxy',
@@ -403,6 +410,10 @@ final List<Product> dummyProducts = [
     price: 219999.0,
     oldPrice: 239999.0,
     image: 'https://images.unsplash.com/photo-1598327105666-5b89351cb31b?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1598327105666-5b89351cb31b?w=800&q=80',
+      'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80',
+    ],
     rating: 4.7,
     reviewCount: 910,
     availableStock: 14,
@@ -412,6 +423,7 @@ final List<Product> dummyProducts = [
     isDeal: true,
     colors: ['#0F172A', '#38BDF8'],
     sizes: [],
+    storageOptions: ['128GB', '256GB', '512GB'],
     tags: ['google', 'pixel 8 pro', 'tensor g3', 'android', 'camera phone'],
     specifications: {
       'Processor': 'Google Tensor G3 & Titan M2 security',
@@ -433,6 +445,10 @@ final List<Product> dummyProducts = [
     price: 184999.0,
     oldPrice: 199999.0,
     image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&q=80',
+      'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=800&q=80',
+    ],
     rating: 4.9,
     reviewCount: 780,
     availableStock: 25,
@@ -442,6 +458,7 @@ final List<Product> dummyProducts = [
     isDeal: true,
     colors: ['#475569', '#38BDF8'],
     sizes: [],
+    storageOptions: ['128GB', '256GB', '512GB'],
     tags: ['apple', 'ipad', 'ipad air', 'm2', 'tablet', 'apple pencil'],
     specifications: {
       'Processor': 'Apple M2 8-core CPU / 10-core GPU',
@@ -463,6 +480,10 @@ final List<Product> dummyProducts = [
     price: 119999.0,
     oldPrice: 134999.0,
     image: 'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=800&q=80',
+      'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&q=80',
+    ],
     rating: 4.7,
     reviewCount: 460,
     availableStock: 30,
@@ -472,6 +493,7 @@ final List<Product> dummyProducts = [
     isDeal: true,
     colors: ['#334155', '#A7F3D0'],
     sizes: [],
+    storageOptions: ['128GB', '256GB'],
     tags: ['samsung', 'tablet', 'tab s9 fe', 's pen', 'android tablet'],
     specifications: {
       'Screen': '10.9" WQXGA 90Hz Smooth Display',
@@ -493,6 +515,10 @@ final List<Product> dummyProducts = [
     price: 319999.0,
     oldPrice: 349999.0,
     image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80',
+      'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&q=80',
+    ],
     rating: 4.8,
     reviewCount: 310,
     availableStock: 12,
@@ -502,6 +528,7 @@ final List<Product> dummyProducts = [
     isDeal: true,
     colors: ['#0F172A', '#F8FAFC'],
     sizes: [],
+    storageOptions: ['256GB', '512GB', '1TB'],
     tags: ['xiaomi', 'xiaomi 14 ultra', 'leica', 'camera phone', 'flagship'],
     specifications: {
       'Optics': 'Leica Quad 50MP Cameras with 1-inch sensor',
