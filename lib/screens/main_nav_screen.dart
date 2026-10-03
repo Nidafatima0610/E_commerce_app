@@ -27,7 +27,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cartItemCount = ref.watch(cartProvider.notifier).itemCount; // Note: to be fully reactive, we should watch provider or calculate in build.
+
     final cartItems = ref.watch(cartProvider);
     final totalCount = cartItems.fold(0, (sum, item) => sum + item.quantity);
 

@@ -9,83 +9,9 @@ import '../models/coupon.dart';
 import '../models/address.dart';
 import '../core/storage_service.dart';
 
-// Dummy Data
-final List<Product> _dummyProducts = [
-  Product(
-    id: 'p1',
-    name: 'Wireless Noise-Cancelling Headphones',
-    description: 'Experience premium sound quality with these wireless headphones featuring active noise cancellation and up to 30 hours of battery life.',
-    price: 299.99,
-    oldPrice: 349.99,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
-    category: 'Electronics',
-    rating: 4.8,
-    reviewCount: 320,
-    availableStock: 50,
-    isFeatured: true,
-  ),
-  Product(
-    id: 'p2',
-    name: 'Minimalist Smartwatch',
-    description: 'Track your fitness, heart rate, and notifications with this sleek and modern smartwatch. Water-resistant up to 50m.',
-    price: 199.50,
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&q=80',
-    category: 'Electronics',
-    rating: 4.5,
-    reviewCount: 156,
-    availableStock: 120,
-  ),
-  Product(
-    id: 'p3',
-    name: 'Classic White Sneakers',
-    description: 'Versatile and comfortable everyday sneakers made with premium leather and a durable rubber sole.',
-    price: 89.99,
-    oldPrice: 110.00,
-    image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&q=80',
-    category: 'Fashion',
-    rating: 4.7,
-    reviewCount: 890,
-    availableStock: 200,
-    isFeatured: true,
-  ),
-  Product(
-    id: 'p4',
-    name: 'Organic Cotton T-Shirt',
-    description: 'Soft, breathable, and sustainably sourced organic cotton t-shirt. Perfect for everyday wear.',
-    price: 24.99,
-    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&q=80',
-    category: 'Fashion',
-    rating: 4.3,
-    reviewCount: 45,
-    availableStock: 300,
-  ),
-  Product(
-    id: 'p5',
-    name: 'Ceramic Coffee Mug',
-    description: 'Handcrafted ceramic mug with a beautiful matte finish. Holds up to 12 oz of your favorite beverage.',
-    price: 18.00,
-    image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=500&q=80',
-    category: 'Home',
-    rating: 4.9,
-    reviewCount: 210,
-    availableStock: 80,
-    isFeatured: true,
-  ),
-  Product(
-    id: 'p6',
-    name: 'Leather Weekend Duffle Bag',
-    description: 'Spacious and stylish duffle bag made from genuine leather. Perfect for short trips and weekend getaways.',
-    price: 150.00,
-    oldPrice: 180.00,
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&q=80',
-    category: 'Fashion',
-    rating: 4.6,
-    reviewCount: 112,
-    availableStock: 30,
-  ),
-];
+import '../models/dummy_data.dart';
 
-final productsProvider = Provider<List<Product>>((ref) => _dummyProducts);
+final productsProvider = Provider<List<Product>>((ref) => dummyProducts);
 
 final categoriesProvider = Provider<List<String>>((ref) {
   final products = ref.watch(productsProvider);
@@ -127,9 +53,9 @@ class CartNotifier extends Notifier<List<CartItem>> {
         final List<dynamic> decoded = jsonDecode(cartData);
         state = decoded.map((e) {
           final pData = e['product'];
-          final product = _dummyProducts.firstWhere(
+          final product = dummyProducts.firstWhere(
             (p) => p.id == pData['id'],
-            orElse: () => _dummyProducts.first,
+            orElse: () => dummyProducts.first,
           );
           return CartItem(
             id: e['id'],
@@ -221,9 +147,9 @@ class RecentlyViewedNotifier extends Notifier<List<Product>> {
     final storage = ref.read(storageServiceProvider);
     final data = storage.getJson('recently_viewed');
     if (data != null && data is List) {
-      state = data.map((id) => _dummyProducts.firstWhere(
+      state = data.map((id) => dummyProducts.firstWhere(
         (p) => p.id == id,
-        orElse: () => _dummyProducts.first,
+        orElse: () => dummyProducts.first,
       )).toList();
     }
   }
@@ -263,9 +189,9 @@ class WishlistNotifier extends Notifier<List<Product>> {
       try {
         final List<dynamic> decoded = jsonDecode(wishlistData);
         state = decoded.map((e) {
-          return _dummyProducts.firstWhere(
+          return dummyProducts.firstWhere(
             (p) => p.id == e['id'],
-            orElse: () => _dummyProducts.first,
+            orElse: () => dummyProducts.first,
           );
         }).toList();
       } catch (e) {

@@ -65,7 +65,7 @@ class HomeScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -108,7 +108,7 @@ class HomeScreen extends ConsumerWidget {
                         child: Icon(
                           Icons.shopping_bag,
                           size: 120,
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                         ),
                       ),
                       Padding(
@@ -177,7 +177,7 @@ class HomeScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   scrollDirection: Axis.horizontal,
                   itemCount: categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (context, index) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
                     return ActionChip(
                       label: Text(categories[index]),
@@ -211,12 +211,12 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               SizedBox(
-                height: 280,
+                height: 310,
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   scrollDirection: Axis.horizontal,
                   itemCount: featuredProducts.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 16),
+                  separatorBuilder: (context, index) => const SizedBox(width: 16),
                   itemBuilder: (context, index) {
                     return ProductCard(product: featuredProducts[index]);
                   },
@@ -237,7 +237,7 @@ class HomeScreen extends ConsumerWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.65,
+                    childAspectRatio: 0.58,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),

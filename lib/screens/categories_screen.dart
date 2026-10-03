@@ -36,7 +36,7 @@ class CategoriesScreen extends ConsumerWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
                     decoration: BoxDecoration(
-                      color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
+                      color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.1) : Colors.transparent,
                       border: Border(
                         left: BorderSide(
                           color: isSelected ? theme.colorScheme.primary : Colors.transparent,
@@ -66,7 +66,7 @@ class CategoriesScreen extends ConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      childAspectRatio: 0.65,
+                      childAspectRatio: 0.58,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
                     ),
