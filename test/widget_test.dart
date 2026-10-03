@@ -317,8 +317,8 @@ void main() {
       // All products have realistic prices in PKR
       expect(dummyProducts.any((p) => p.name.contains('iPhone 15 Pro')), isTrue);
       final phone = dummyProducts.firstWhere((p) => p.name.contains('iPhone 15 Pro'));
-      expect(phone.price, equals(289999.0));
-      expect(phone.formattedPrice, equals('Rs. 289,999'));
+      expect(phone.price, equals(439999.0));
+      expect(phone.formattedPrice, equals('Rs. 439,999'));
     });
   });
 }

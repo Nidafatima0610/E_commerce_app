@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../models/coupon.dart';
 import '../core/currency_format.dart';
-import '../widgets/custom_image.dart';
+import '../widgets/product_image.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
@@ -57,12 +57,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final cartItems = ref.watch(cartProvider);
+    final savedItems = ref.watch(savedForLaterProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final subtotal = ref.watch(cartProvider.notifier).subtotal;
     final coupon = ref.watch(appliedCouponProvider);
     final discount = ref.read(cartProvider.notifier).calculateDiscount(coupon);
-    final shipping = subtotal >= 3000 || subtotal == 0 ? 0.0 : 250.0;
+    final shipping = (subtotal >= 2999 || subtotal == 0) ? 0.0 : 250.0;
     final total = (subtotal - discount + shipping).clamp(0.0, double.infinity);
 
     return Scaffold(
@@ -99,7 +100,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             ),
         ],
       ),
-      body: cartItems.isEmpty
+      body: cartItems.isEmpty && savedItems.isEmpty
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
@@ -127,7 +128,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Looks like you haven\'t added any items yet.\nExplore our top deals and start shopping!',
+                      'Looks like you haven\'t added any items to your cart yet.\nExplore our catalog with 75+ top products across Pakistan!',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -154,51 +155,39 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Free Shipping Notice
-                  if (subtotal > 0 && subtotal < 3000)
+                  // Free Shipping Progress
+                  if (cartItems.isNotEmpty)
                     Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                        color: subtotal >= 2999
+                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                            : const Color(0xFF3B82F6).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.2)),
+                        border: Border.all(
+                          color: subtotal >= 2999
+                              ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                              : const Color(0xFF3B82F6).withValues(alpha: 0.25),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.local_shipping_outlined, color: Color(0xFF2563EB), size: 20),
+                          Icon(
+                            subtotal >= 2999 ? Icons.check_circle_rounded : Icons.local_shipping_outlined,
+                            size: 20,
+                            color: subtotal >= 2999 ? const Color(0xFF10B981) : const Color(0xFF2563EB),
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Add ${CurrencyFormat.format(3000 - subtotal)} more to get FREE Delivery across Pakistan!',
-                              style: const TextStyle(
-                                color: Color(0xFF1E40AF),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else if (subtotal >= 3000)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.25)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 20),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'You have unlocked FREE Standard Delivery!',
+                              subtotal >= 2999
+                                  ? 'Congratulations! You qualify for FREE Delivery across Pakistan 🎉'
+                                  : 'Add ${CurrencyFormat.format(2999 - subtotal)} more to enjoy FREE Delivery!',
                               style: TextStyle(
-                                color: Color(0xFF065F46),
+                                color: subtotal >= 2999
+                                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
+                                    : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1E40AF)),
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -209,319 +198,448 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ),
 
                   // Cart items list
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: cartItems.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final item = cartItems[index];
-                      return Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
+                  if (cartItems.isNotEmpty)
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: cartItems.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final item = cartItems[index];
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                             ),
-                          ],
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Product Image
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: SizedBox(
-                                width: 84,
-                                height: 84,
-                                child: CustomNetworkImage(
-                                  imageUrl: item.product.image,
-                                  fit: BoxFit.cover,
-                                ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
                               ),
-                            ),
-                            const SizedBox(width: 14),
-
-                            // Info + Controls
-                            Expanded(
-                              child: Column(
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
+                                  // Product Image
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: SizedBox(
+                                      width: 80,
+                                      height: 80,
+                                      child: ProductImage(
+                                        imageUrl: item.product.image,
+                                        category: item.product.category,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+
+                                  // Info + Stepper
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              item.product.brand,
-                                              style: TextStyle(
-                                                color: theme.colorScheme.primary,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    item.product.brand,
+                                                    style: TextStyle(
+                                                      color: theme.colorScheme.primary,
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    item.product.name,
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                                      fontWeight: FontWeight.w600,
+                                                      height: 1.25,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                            const SizedBox(height: 2),
+                                            IconButton(
+                                              icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                ref.read(cartProvider.notifier).removeItem(item.id);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+
+                                        // Stepper & Subtotal
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
                                             Text(
-                                              item.product.name,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                height: 1.25,
+                                              CurrencyFormat.format(item.product.price),
+                                              style: TextStyle(
+                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  InkWell(
+                                                    onTap: () {
+                                                      ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1);
+                                                    },
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    child: const Padding(
+                                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      child: Icon(Icons.remove, size: 14),
+                                                    ),
+                                                  ),
+                                                  Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                    child: Text(
+                                                      '${item.quantity}',
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                                    ),
+                                                  ),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      if (item.quantity < item.product.availableStock) {
+                                                        ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
+                                                      }
+                                                    },
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    child: const Padding(
+                                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      child: Icon(Icons.add, size: 14),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Text(
+                                              CurrencyFormat.format(item.subtotal),
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 13.5,
+                                                color: theme.colorScheme.primary,
                                               ),
                                             ),
                                           ],
                                         ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        onPressed: () {
-                                          ref.read(cartProvider.notifier).removeItem(item.id);
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Removed ${item.product.name} from cart'),
-                                              duration: const Duration(seconds: 1),
-                                              behavior: SnackBarBehavior.floating,
-                                            ),
-                                          );
-                                        },
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      ref.read(savedForLaterProvider.notifier).saveForLater(item);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Moved ${item.product.name} to Saved for Later'),
+                                          duration: const Duration(seconds: 1),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.bookmark_border_rounded, size: 15),
+                                    label: const Text('Save for Later', style: TextStyle(fontSize: 11.5)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ==================== COUPON SECTION ====================
+                  if (cartItems.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.local_offer_outlined, size: 18, color: theme.colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Promo Code & Discounts',
+                                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (coupon != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B981)),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${coupon.code} applied (-${coupon.isPercentage ? "${coupon.discount.toInt()}%" : CurrencyFormat.format(coupon.discount)})',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF047857),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-
-                                  // Quantity & Subtotal
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      // Price per unit
-                                      Text(
-                                        CurrencyFormat.format(item.product.price),
-                                        style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-
-                                      // Quantity stepper
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            InkWell(
-                                              onTap: () {
-                                                ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1);
-                                              },
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: const Padding(
-                                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                child: Icon(Icons.remove, size: 15),
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                                              child: Text(
-                                                '${item.quantity}',
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                              ),
-                                            ),
-                                            InkWell(
-                                              onTap: () {
-                                                if (item.quantity < item.product.availableStock) {
-                                                  ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
-                                                }
-                                              },
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: const Padding(
-                                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                child: Icon(Icons.add, size: 15),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      // Item Subtotal
-                                      Text(
-                                        CurrencyFormat.format(item.subtotal),
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14,
-                                          color: theme.colorScheme.primary,
-                                        ),
-                                      ),
-                                    ],
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () {
+                                      ref.read(appliedCouponProvider.notifier).update(null);
+                                      _couponController.clear();
+                                    },
                                   ),
                                 ],
                               ),
                             ),
+                          ] else ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _couponController,
+                                    textCapitalization: TextCapitalization.characters,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter code (e.g. AZADI20, SAVE10)',
+                                      hintStyle: TextStyle(
+                                        fontSize: 12.5,
+                                        color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton(
+                                  onPressed: _applyCoupon,
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: const Text('Apply'),
+                                ),
+                              ],
+                            ),
+                            if (_couponError != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6.0),
+                                child: Text(
+                                  _couponError!,
+                                  style: const TextStyle(color: Colors.red, fontSize: 11),
+                                ),
+                              ),
                           ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ==================== COUPON SECTION ====================
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+
+                  const SizedBox(height: 20),
+
+                  // ==================== SAVED FOR LATER SECTION ====================
+                  if (savedItems.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.local_offer_outlined, size: 18, color: theme.colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Promo Code & Coupons',
-                              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                        Text(
+                          'Saved For Later (${savedItems.length})',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 12),
-                        if (coupon != null) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: savedItems.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final product = savedItems[index];
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: SizedBox(
+                                  width: 65,
+                                  height: 65,
+                                  child: ProductImage(
+                                    imageUrl: product.image,
+                                    category: product.category,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B981)),
-                                    const SizedBox(width: 8),
                                     Text(
-                                      '${coupon.code} applied (-${coupon.isPercentage ? "${coupon.discount.toInt()}%" : CurrencyFormat.format(coupon.discount)})',
-                                      style: const TextStyle(
+                                      product.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      CurrencyFormat.format(product.price),
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF047857),
+                                        fontSize: 13,
                                       ),
                                     ),
                                   ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.close, size: 16, color: Colors.grey),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  onPressed: () {
-                                    ref.read(appliedCouponProvider.notifier).update(null);
-                                    _couponController.clear();
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _couponController,
-                                  textCapitalization: TextCapitalization.characters,
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter code (e.g. SAVE10, PKR500)',
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    errorText: _couponError,
-                                  ),
-                                ),
                               ),
-                              const SizedBox(width: 10),
-                              ElevatedButton(
-                                onPressed: _applyCoupon,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              TextButton(
+                                onPressed: () {
+                                  ref.read(savedForLaterProvider.notifier).moveToCart(product);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Moved ${product.name} back to cart'),
+                                      duration: const Duration(seconds: 1),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                },
+                                child: const Text('Move to Cart', style: TextStyle(fontSize: 12)),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                                onPressed: () {
+                                  ref.read(savedForLaterProvider.notifier).removeSaved(product.id);
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ==================== PRICE SUMMARY ====================
+                  if (cartItems.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Order Summary',
+                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildPriceRow('Subtotal', CurrencyFormat.format(subtotal), theme),
+                          if (coupon != null && discount > 0)
+                            _buildPriceRow(
+                              'Coupon Discount (${coupon.code})',
+                              '-${CurrencyFormat.format(discount)}',
+                              theme,
+                              color: const Color(0xFF10B981),
+                            ),
+                          _buildPriceRow(
+                            'Estimated Delivery (TCS Courier)',
+                            shipping == 0 ? 'FREE' : CurrencyFormat.format(shipping),
+                            theme,
+                            color: shipping == 0 ? const Color(0xFF10B981) : null,
+                          ),
+                          const Divider(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Total Payable',
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                CurrencyFormat.format(total),
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: theme.colorScheme.primary,
                                 ),
-                                child: const Text('Apply'),
                               ),
                             ],
                           ),
                         ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ==================== ORDER SUMMARY CARD ====================
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Order Summary',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 14),
-                        _buildPriceRow('Subtotal', CurrencyFormat.format(subtotal), theme),
-                        if (discount > 0)
-                          _buildPriceRow(
-                            'Coupon Discount',
-                            '-${CurrencyFormat.format(discount)}',
-                            theme,
-                            color: const Color(0xFF10B981),
-                          ),
-                        _buildPriceRow(
-                          'Delivery Fee',
-                          shipping == 0 ? 'FREE' : CurrencyFormat.format(shipping),
-                          theme,
-                          color: shipping == 0 ? const Color(0xFF10B981) : null,
-                        ),
-                        const Divider(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Total Amount',
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              CurrencyFormat.format(total),
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),

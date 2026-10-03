@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../providers/app_providers.dart';
 import '../core/currency_format.dart';
-import '../widgets/custom_image.dart';
+import '../widgets/product_image.dart';
 import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
 import 'product_compare_screen.dart';
@@ -20,29 +20,97 @@ class ProductDetailsScreen extends ConsumerStatefulWidget {
 class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
   int _quantity = 1;
   int _selectedImageIndex = 0;
-  String _selectedSize = 'M';
-  Color _selectedColor = const Color(0xFF0F172A);
-
-  final List<Color> _availableColors = [
-    const Color(0xFF0F172A), // Midnight Black
-    const Color(0xFF2563EB), // Royal Blue
-    const Color(0xFF64748B), // Slate Grey
-    const Color(0xFFEF4444), // Crimson Red
-  ];
-
-  final List<String> _availableSizes = ['S', 'M', 'L', 'XL'];
+  String? _selectedSize;
+  String? _selectedColor;
 
   @override
   void initState() {
     super.initState();
+    if (widget.product.sizes.isNotEmpty) {
+      _selectedSize = widget.product.sizes.first;
+    }
+    if (widget.product.colors.isNotEmpty) {
+      _selectedColor = widget.product.colors.first;
+    }
     Future.microtask(() {
       ref.read(recentlyViewedProvider.notifier).addProduct(widget.product);
     });
   }
 
-  bool _isFashionOrShoes(String category) {
-    final cat = category.toLowerCase();
-    return cat == 'fashion' || cat == 'shoes';
+  Color _parseColorHex(String hexString) {
+    try {
+      final buffer = StringBuffer();
+      if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
+      buffer.write(hexString.replaceFirst('#', ''));
+      return Color(int.parse(buffer.toString(), radix: 16));
+    } catch (_) {
+      return const Color(0xFF0F172A);
+    }
+  }
+
+  void _showShareSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Share Product', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), shape: BoxShape.circle),
+                  child: const Icon(Icons.copy_rounded, color: Color(0xFF10B981)),
+                ),
+                title: const Text('Copy Product Link', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('https://ecommerce.pk/product/${widget.product.id}'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Product link for "${widget.product.name}" copied to clipboard!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF25D366).withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366)),
+                ),
+                title: const Text('Share to WhatsApp', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Send to friends and family'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Opening WhatsApp to share product...'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showSizeGuide(BuildContext context) {
@@ -140,6 +208,35 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     );
   }
 
+  Widget _buildSpecRow(ThemeData theme, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -147,11 +244,12 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     final wishlist = ref.watch(wishlistProvider);
     final bool inWishlist = wishlist.any((p) => p.id == widget.product.id);
     final allProducts = ref.watch(productsProvider);
-    
+    final recentlyViewed = ref.watch(recentlyViewedProvider);
+
     // Related products (same category excluding current)
     final relatedProducts = allProducts
         .where((p) => p.category == widget.product.category && p.id != widget.product.id)
-        .take(5)
+        .take(6)
         .toList();
 
     final images = widget.product.allImages;
@@ -191,15 +289,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Product link for "${widget.product.name}" copied!'),
-                  duration: const Duration(milliseconds: 1200),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onPressed: () => _showShareSheet(context),
           ),
         ],
       ),
@@ -213,15 +303,44 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
               child: Column(
                 children: [
                   AspectRatio(
-                    aspectRatio: 1.2,
-                    child: CustomNetworkImage(
-                      imageUrl: images[_selectedImageIndex],
-                      fit: BoxFit.contain,
+                    aspectRatio: 1.25,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        ProductImage(
+                          imageUrl: images[_selectedImageIndex],
+                          category: widget.product.category,
+                          fit: BoxFit.contain,
+                          enableZoomOnTap: true,
+                        ),
+                        Positioned(
+                          bottom: 12,
+                          right: 16,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${_selectedImageIndex + 1}/${images.length}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (images.length > 1)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
+                      padding: const EdgeInsets.symmetric(vertical: 10.0),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(images.length, (index) {
@@ -229,9 +348,9 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                           return GestureDetector(
                             onTap: () => setState(() => _selectedImageIndex = index),
                             child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 6),
-                              width: 48,
-                              height: 48,
+                              margin: const EdgeInsets.symmetric(horizontal: 5),
+                              width: 50,
+                              height: 50,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
@@ -241,7 +360,11 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
-                                child: CustomNetworkImage(imageUrl: images[index]),
+                                child: ProductImage(
+                                  imageUrl: images[index],
+                                  category: widget.product.category,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           );
@@ -258,7 +381,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Brand & Category & Compare shortcut
+                  // Brand, Category & Stock Status
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -296,9 +419,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              widget.product.availableStock > 0
-                                  ? 'In Stock (${widget.product.availableStock})'
-                                  : 'Out of Stock',
+                              widget.product.stockStatus,
                               style: TextStyle(
                                 color: widget.product.availableStock > 0 ? const Color(0xFF10B981) : Colors.red,
                                 fontSize: 11,
@@ -320,7 +441,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       height: 1.25,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // Rating + Reviews
                   Wrap(
@@ -401,103 +522,40 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   ),
                   const Divider(height: 32),
 
-                  // ==================== 3. COLOR SELECTION ====================
-                  Text(
-                    'Color Variant',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: _availableColors.map((color) {
-                      final isSelected = _selectedColor == color;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedColor = color),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 12),
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                            ),
-                            child: isSelected
-                                ? const Icon(Icons.check, size: 16, color: Colors.white)
-                                : null,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ==================== 4. SIZE SELECTION (if Fashion/Shoes) ====================
-                  if (_isFashionOrShoes(widget.product.category)) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Select Size',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        InkWell(
-                          onTap: () => _showSizeGuide(context),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Row(
-                              children: [
-                                Icon(Icons.straighten_outlined, size: 16, color: theme.colorScheme.primary),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Size Guide',
-                                  style: TextStyle(
-                                    color: theme.colorScheme.primary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                  // ==================== 3. COLOR SELECTION (Only if product has colors) ====================
+                  if (widget.product.colors.isNotEmpty) ...[
+                    Text(
+                      'Available Colors',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
                     Row(
-                      children: _availableSizes.map((size) {
-                        final isSelected = _selectedSize == size;
+                      children: widget.product.colors.map((colorHex) {
+                        final isSelected = _selectedColor == colorHex;
+                        final color = _parseColorHex(colorHex);
                         return GestureDetector(
-                          onTap: () => setState(() => _selectedSize = size),
+                          onTap: () => setState(() => _selectedColor = colorHex),
                           child: Container(
                             margin: const EdgeInsets.only(right: 12),
-                            width: 44,
-                            height: 44,
+                            padding: const EdgeInsets.all(3),
                             decoration: BoxDecoration(
-                              color: isSelected ? theme.colorScheme.primary : (isDark ? const Color(0xFF1E293B) : Colors.white),
-                              borderRadius: BorderRadius.circular(10),
+                              shape: BoxShape.circle,
                               border: Border.all(
-                                color: isSelected
-                                    ? theme.colorScheme.primary
-                                    : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                                color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+                                width: 2,
                               ),
                             ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              size,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black87),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.black12),
                               ),
+                              child: isSelected
+                                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                  : null,
                             ),
                           ),
                         );
@@ -506,50 +564,81 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // ==================== 5. QUANTITY SELECTOR ====================
-                  Text(
-                    'Quantity',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: 140,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                      ),
-                    ),
-                    child: Row(
+                  // ==================== 4. SIZE SELECTION (Only if product has sizes) ====================
+                  if (widget.product.sizes.isNotEmpty) ...[
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove, size: 18),
-                          onPressed: () {
-                            if (_quantity > 1) setState(() => _quantity--);
-                          },
-                        ),
                         Text(
-                          '$_quantity',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          'Select Size',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.add, size: 18),
-                          onPressed: () {
-                            if (_quantity < widget.product.availableStock) {
-                              setState(() => _quantity++);
-                            }
-                          },
+                        TextButton.icon(
+                          onPressed: () => _showSizeGuide(context),
+                          icon: const Icon(Icons.straighten, size: 16),
+                          label: const Text('Size Guide'),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: widget.product.sizes.map((size) {
+                        final isSelected = _selectedSize == size;
+                        return ChoiceChip(
+                          label: Text(size),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            if (selected) setState(() => _selectedSize = size);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ==================== 5. QUANTITY SELECTOR ====================
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Quantity',
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove, size: 18),
+                              onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                            ),
+                            Text(
+                              '$_quantity',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add, size: 18),
+                              onPressed: _quantity < widget.product.availableStock
+                                  ? () => setState(() => _quantity++)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const Divider(height: 32),
 
                   // ==================== 6. DESCRIPTION ====================
                   Text(
-                    'Description',
+                    'About this Product',
                     style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -557,48 +646,146 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                     widget.product.description,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       height: 1.6,
-                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      color: isDark ? Colors.grey[300] : Colors.grey[800],
                     ),
                   ),
-                  const Divider(height: 32),
+                  const SizedBox(height: 20),
 
                   // ==================== 7. SPECIFICATIONS ====================
-                  Text(
-                    'Product Specifications',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSpecRow(theme, 'Brand', widget.product.brand),
-                  _buildSpecRow(theme, 'Category', widget.product.category),
-                  _buildSpecRow(theme, 'SKU Code', '#${widget.product.id.toUpperCase()}'),
-                  _buildSpecRow(theme, 'Warranty', '1 Year Official Brand Warranty'),
-                  _buildSpecRow(theme, 'Delivery', 'TCS / Leopards Courier (2-4 business days)'),
-                  _buildSpecRow(theme, 'Cash on Delivery', 'Available nationwide'),
-                  _buildSpecRow(theme, 'Returns', '7 Days Hassle-Free Exchange / Return'),
-                  const Divider(height: 32),
-
-                  // ==================== 8. RELATED PRODUCTS ====================
-                  if (relatedProducts.isNotEmpty) ...[
+                  if (widget.product.specifications.isNotEmpty) ...[
                     Text(
-                      'You Might Also Like',
+                      'Technical Specifications',
                       style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildSpecRow(theme, 'SKU Code', '#${widget.product.id.toUpperCase()}'),
+                          _buildSpecRow(theme, 'Category', '${widget.product.category} • ${widget.product.subcategory}'),
+                          _buildSpecRow(theme, 'Brand', widget.product.brand),
+                          for (final entry in widget.product.specifications.entries)
+                            _buildSpecRow(theme, entry.key, entry.value),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ==================== 8. DELIVERY & SELLER ====================
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.local_shipping_outlined, size: 20, color: Color(0xFF10B981)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                widget.product.deliveryInfo,
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                        Row(
+                          children: [
+                            const Icon(Icons.storefront_outlined, size: 20, color: Color(0xFF3B82F6)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.product.sellerName,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '★ ${widget.product.sellerRating} Merchant Rating • 99% Positive Feedback',
+                                    style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                        Row(
+                          children: [
+                            const Icon(Icons.verified_user_outlined, size: 20, color: Color(0xFFF59E0B)),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '100% Genuine Guarantee • 7 Days Hassle-Free Returns',
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ==================== 9. RELATED PRODUCTS ====================
+                  if (relatedProducts.isNotEmpty) ...[
+                    Text(
+                      'Similar in ${widget.product.category}',
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
                     SizedBox(
-                      height: 285,
+                      height: 275,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: relatedProducts.length,
                         separatorBuilder: (context, index) => const SizedBox(width: 14),
                         itemBuilder: (context, index) {
-                          return ProductCard(
-                            product: relatedProducts[index],
-                            width: 175,
-                          );
+                          return ProductCard(product: relatedProducts[index], width: 175);
                         },
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 28),
+                  ],
+
+                  // ==================== 10. RECENTLY VIEWED ====================
+                  if (recentlyViewed.length > 1) ...[
+                    Text(
+                      'Recently Viewed',
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 275,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: recentlyViewed.where((p) => p.id != widget.product.id).length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 14),
+                        itemBuilder: (context, index) {
+                          final p = recentlyViewed.where((item) => item.id != widget.product.id).toList()[index];
+                          return ProductCard(product: p, width: 175);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 28),
                   ],
                 ],
               ),
@@ -606,136 +793,67 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
           ],
         ),
       ),
-
-      // ==================== 9. FIXED BOTTOM ACTION BAR ====================
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, -4),
-              ),
-            ],
-            border: Border(
-              top: BorderSide(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-              ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, -3),
             ),
-          ),
+          ],
+        ),
+        child: SafeArea(
           child: Row(
             children: [
-              // Total Price
-              Flexible(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total Price',
-                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey, fontSize: 11),
-                    ),
-                    Text(
-                      CurrencyFormat.format(widget.product.price * _quantity),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.primary,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: widget.product.isOutOfStock
+                      ? null
+                      : () {
+                          ref.read(cartProvider.notifier).addItem(widget.product, quantity: _quantity);
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Added $_quantity ${widget.product.name} to cart'),
+                              duration: const Duration(milliseconds: 1500),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  label: const Text('Add to Cart'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
-
-              // Add To Cart Button
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    for (int i = 0; i < _quantity; i++) {
-                      ref.read(cartProvider.notifier).addItem(widget.product);
-                    }
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Added $_quantity item(s) to cart'),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                        action: SnackBarAction(
-                          label: 'View Cart',
-                          textColor: Colors.white,
-                          onPressed: () {
-                            ref.read(bottomNavIndexProvider.notifier).setIndex(2);
-                            Navigator.popUntil(context, (route) => route.isFirst);
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.add_shopping_cart_rounded, size: 16),
-                  label: const Text('Add to Cart', style: TextStyle(fontSize: 12.5)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Buy Now Button
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    for (int i = 0; i < _quantity; i++) {
-                      ref.read(cartProvider.notifier).addItem(widget.product);
-                    }
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const CheckoutScreen()),
-                    );
-                  },
+                child: ElevatedButton.icon(
+                  onPressed: widget.product.isOutOfStock
+                      ? null
+                      : () {
+                          ref.read(cartProvider.notifier).addItem(widget.product, quantity: _quantity);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const CheckoutScreen()),
+                          );
+                        },
+                  icon: const Icon(Icons.flash_on, size: 18),
+                  label: const Text('Buy Now'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Buy Now', style: TextStyle(fontSize: 12.5)),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSpecRow(ThemeData theme, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

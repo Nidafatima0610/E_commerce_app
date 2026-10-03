@@ -1,16 +1,101 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../providers/app_providers.dart';
 import '../widgets/product_card.dart';
-import '../widgets/custom_image.dart';
+import '../widgets/product_image.dart';
 import '../core/currency_format.dart';
 import 'search_screen.dart';
 import 'product_list_screen.dart';
 import 'product_details_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  late PageController _bannerController;
+  int _currentBannerIndex = 0;
+  Timer? _bannerTimer;
+
+  final List<Map<String, dynamic>> _promoBanners = [
+    {
+      'tag': 'SUMMER MEGA SALE',
+      'title': 'Up to 50% Off Top Brands',
+      'subtitle': 'Explore premium headphones, sneakers & eastern wear across Pakistan',
+      'buttonText': 'Shop Deals',
+      'gradient': [const Color(0xFF1E3A8A), const Color(0xFF2563EB), const Color(0xFF3B82F6)],
+      'badgeColor': const Color(0xFFFBBF24),
+      'badgeTextColor': const Color(0xFF0F172A),
+      'icon': Icons.bolt_rounded,
+      'destination': 'deals',
+    },
+    {
+      'tag': 'FLAGSHIP ELECTRONICS',
+      'title': 'Next-Gen Sound & Audio Gear',
+      'subtitle': 'Authentic Sony, Bose & Apple devices with official local warranties',
+      'buttonText': 'Explore Tech',
+      'gradient': [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF334155)],
+      'badgeColor': const Color(0xFF38BDF8),
+      'badgeTextColor': const Color(0xFF0F172A),
+      'icon': Icons.headphones_rounded,
+      'destination': 'electronics',
+    },
+    {
+      'tag': 'NEW FESTIVE DROP',
+      'title': 'Khaadi, J. & Sapphire Pret',
+      'subtitle': 'Pure raw silk, embroidered lawn suits & modern tailored kurtas',
+      'buttonText': 'Browse Fashion',
+      'gradient': [const Color(0xFF831843), const Color(0xFFBE185D), const Color(0xFFDB2777)],
+      'badgeColor': const Color(0xFFFDE047),
+      'badgeTextColor': const Color(0xFF831843),
+      'icon': Icons.checkroom_rounded,
+      'destination': 'fashion',
+    },
+    {
+      'tag': 'EXPRESS DELIVERY',
+      'title': '24-Hour Delivery in Lahore & ISB',
+      'subtitle': 'Order everyday fitness equipment, sneakers & luxury timepieces today',
+      'buttonText': 'Shop Best Sellers',
+      'gradient': [const Color(0xFF064E3B), const Color(0xFF047857), const Color(0xFF059669)],
+      'badgeColor': const Color(0xFF34D399),
+      'badgeTextColor': const Color(0xFF064E3B),
+      'icon': Icons.local_shipping_rounded,
+      'destination': 'bestsellers',
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _bannerController = PageController();
+    _startBannerTimer();
+  }
+
+  void _startBannerTimer() {
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_bannerController.hasClients) {
+        final nextIndex = (_currentBannerIndex + 1) % _promoBanners.length;
+        _bannerController.animateToPage(
+          nextIndex,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
+    super.dispose();
+  }
 
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
@@ -22,18 +107,17 @@ class HomeScreen extends ConsumerWidget {
         return Icons.checkroom_outlined;
       case 'shoes':
         return Icons.snowshoeing_outlined;
-      case 'beauty':
-        return Icons.spa_outlined;
-      case 'home & kitchen':
-        return Icons.kitchen_outlined;
-      case 'accessories':
-        return Icons.shopping_bag_outlined;
-      case 'bags':
-        return Icons.backpack_outlined;
       case 'watches':
         return Icons.watch_outlined;
-      case 'gaming':
-        return Icons.sports_esports_outlined;
+      case 'bags & accessories':
+      case 'bags':
+        return Icons.backpack_outlined;
+      case 'home & living':
+        return Icons.kitchen_outlined;
+      case 'beauty & care':
+      case 'beauty':
+        return Icons.spa_outlined;
+      case 'sports & fitness':
       case 'sports':
         return Icons.fitness_center_outlined;
       default:
@@ -41,16 +125,314 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
+  void _handleBannerTap(String destination) {
+    switch (destination) {
+      case 'deals':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProductListScreen(
+              title: 'Flash & Summer Deals',
+              onlyDeals: true,
+            ),
+          ),
+        );
+        break;
+      case 'electronics':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProductListScreen(
+              title: 'Electronics',
+              initialCategory: 'Electronics',
+            ),
+          ),
+        );
+        break;
+      case 'fashion':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProductListScreen(
+              title: 'Fashion & Apparel',
+              initialCategory: 'Fashion',
+            ),
+          ),
+        );
+        break;
+      case 'bestsellers':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProductListScreen(
+              title: 'Best Sellers',
+              onlyBestsellers: true,
+            ),
+          ),
+        );
+        break;
+      default:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProductListScreen(title: 'All Products'),
+          ),
+        );
+    }
+  }
+
+  void _showCityPicker(BuildContext context, String currentCity) {
+    final cities = [
+      'Gulberg, Lahore',
+      'DHA Phase 5, Lahore',
+      'Clifton, Karachi',
+      'DHA Phase 6, Karachi',
+      'Sector F-7/2, Islamabad',
+      'Sector F-10, Islamabad',
+      'Bahria Town, Rawalpindi',
+      'Civil Lines, Faisalabad',
+      'University Town, Peshawar',
+      'Cantt, Multan',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Select Delivery Location',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const Text(
+                'Choose your city for accurate shipping estimates and express courier dispatch.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: cities.length,
+                  itemBuilder: (context, index) {
+                    final city = cities[index];
+                    final isSelected = city == currentCity;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        Icons.location_on_outlined,
+                        color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey,
+                      ),
+                      title: Text(
+                        city,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                          : null,
+                      onTap: () {
+                        ref.read(deliveryCityProvider.notifier).setCity(city);
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Delivery address set to $city'),
+                            duration: const Duration(milliseconds: 1400),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationsSheet(BuildContext context) {
+    ref.read(notificationCountProvider.notifier).markAllAsRead();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Notifications & Offers',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.percent_rounded, color: Color(0xFFEF4444)),
+                ),
+                title: const Text('Promo Code AZADI20 Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('Get 20% off your order on carts above Rs. 10,000. Apply at checkout.'),
+              ),
+              const Divider(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.local_shipping_rounded, color: Color(0xFF10B981)),
+                ),
+                title: const Text('Free Shipping Available', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('Enjoy free TCS courier shipping across Pakistan on orders above Rs. 2,999.'),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    IconData? icon,
+    Color? iconColor,
+    required VoidCallback onSeeAll,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: (iconColor ?? theme.colorScheme.primary).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: iconColor ?? theme.colorScheme.primary, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onSeeAll,
+            child: const Text('See All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHorizontalProductList({
+    required List<Product> products,
+    double height = 275,
+  }) {
+    if (products.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        scrollDirection: Axis.horizontal,
+        itemCount: products.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          return ProductCard(
+            product: products[index],
+            width: 175,
+          );
+        },
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final products = ref.watch(productsProvider);
-    final featuredProducts = products.where((p) => p.isFeatured).toList();
-    final dealProducts = products.where((p) => p.discountPercentage > 0).toList();
+
     final categories = ref.watch(categoriesProvider);
+    final dealProducts = ref.watch(dealProductsProvider);
+    final popularProducts = ref.watch(featuredProductsProvider);
+    final bestSellers = ref.watch(bestsellerProductsProvider);
+    final newArrivals = ref.watch(newArrivalProductsProvider);
+    final dealsOfTheDay = ref.watch(dealsOfTheDayProvider);
+    final recommendedProducts = ref.watch(recommendedProductsProvider);
     final recentlyViewed = ref.watch(recentlyViewedProvider);
     final userProfile = ref.watch(userProfileProvider);
+    final deliveryCity = ref.watch(deliveryCityProvider);
+    final unreadCount = ref.watch(notificationCountProvider);
     final orders = ref.watch(ordersProvider);
 
     // Extract products from previous orders for "Buy Again"
@@ -71,22 +453,27 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ==================== 1. HEADER ====================
+              // ==================== 1. TOP BAR ====================
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Location & Greeting
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Text(
-                                'Welcome back,',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              Flexible(
+                                child: Text(
+                                  'Welcome back, ${userProfile.name}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 4),
@@ -94,15 +481,50 @@ class HomeScreen extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            userProfile.name,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+                          GestureDetector(
+                            onTap: () => _showCityPicker(context, deliveryCity),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.location_on_rounded,
+                                  size: 16,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    deliveryCity,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
+
+                    // Notification Icon with Badge
+                    IconButton(
+                      icon: Badge(
+                        isLabelVisible: unreadCount > 0,
+                        label: Text(unreadCount.toString()),
+                        child: const Icon(Icons.notifications_outlined, size: 24),
+                      ),
+                      onPressed: () => _showNotificationsSheet(context),
+                    ),
+
+                    const SizedBox(width: 4),
+
+                    // Profile Avatar
                     InkWell(
                       onTap: () {
                         ref.read(bottomNavIndexProvider.notifier).setIndex(4);
@@ -115,10 +537,8 @@ class HomeScreen extends ConsumerWidget {
                           border: Border.all(color: theme.colorScheme.primary, width: 2),
                         ),
                         child: CircleAvatar(
-                          radius: 20,
+                          radius: 19,
                           backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-                          foregroundImage: const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&q=80'),
-                          onForegroundImageError: (_, _) {},
                           child: Icon(Icons.person, color: theme.colorScheme.primary, size: 20),
                         ),
                       ),
@@ -138,7 +558,7 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF1E293B) : Colors.white,
                       borderRadius: BorderRadius.circular(14),
@@ -159,7 +579,7 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Search products, brands, categories...',
+                            'Search 75+ products, brands, tech, fashion...',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
@@ -184,145 +604,154 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-              // ==================== 3. PROMOTIONAL BANNER ====================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1E3A8A), Color(0xFF2563EB), Color(0xFF3B82F6)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.3),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -15,
-                        bottom: -20,
-                        child: Icon(
-                          Icons.local_mall_outlined,
-                          size: 150,
-                          color: Colors.white.withValues(alpha: 0.12),
+              // ==================== 3. PROMOTIONAL CAROUSEL ====================
+              SizedBox(
+                height: 165,
+                child: PageView.builder(
+                  controller: _bannerController,
+                  onPageChanged: (index) {
+                    setState(() => _currentBannerIndex = index);
+                  },
+                  itemCount: _promoBanners.length,
+                  itemBuilder: (context, index) {
+                    final banner = _promoBanners[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(
+                            colors: banner['gradient'] as List<Color>,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (banner['gradient'][1] as Color).withValues(alpha: 0.3),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 18.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                        child: Stack(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.amber[400],
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'SUMMER MEGA SALE',
-                                style: TextStyle(
-                                  color: Color(0xFF0F172A),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                ),
+                            Positioned(
+                              right: -10,
+                              bottom: -15,
+                              child: Icon(
+                                banner['icon'] as IconData,
+                                size: 140,
+                                color: Colors.white.withValues(alpha: 0.12),
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Up to 40% Off Top Brands',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                height: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Explore hundreds of electronics, shoes & styles across Pakistan',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.85),
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const ProductListScreen(
-                                      title: 'Summer Sale Deals',
-                                      onlyDeals: true,
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: banner['badgeColor'] as Color,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          banner['tag'] as String,
+                                          style: TextStyle(
+                                            color: banner['badgeTextColor'] as Color,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        banner['title'] as String,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        banner['subtitle'] as String,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.85),
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () => _handleBannerTap(banner['destination'] as String),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: banner['gradient'][0] as Color,
+                                      minimumSize: const Size(80, 30),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      banner['buttonText'] as String,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                   ),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF1E3A8A),
-                                minimumSize: const Size(85, 32),
-                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: const Text(
-                                'Shop Now',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(height: 26),
+
+              // Carousel Indicators
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_promoBanners.length, (index) {
+                  final isSelected = index == _currentBannerIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: isSelected ? 18 : 6,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : (isDark ? Colors.grey[700] : Colors.grey[300]),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 20),
 
               // ==================== 4. CATEGORIES ====================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Categories',
-                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            'Browse by department',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        ref.read(bottomNavIndexProvider.notifier).setIndex(1);
-                      },
-                      child: const Text('See All'),
-                    ),
-                  ],
-                ),
+              _buildSectionHeader(
+                context: context,
+                title: 'Categories',
+                subtitle: 'Browse 9 departments & 75+ products',
+                onSeeAll: () {
+                  ref.read(bottomNavIndexProvider.notifier).setIndex(1);
+                },
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -366,7 +795,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 6),
                           SizedBox(
-                            width: 68,
+                            width: 72,
                             child: Text(
                               category,
                               textAlign: TextAlign.center,
@@ -384,179 +813,153 @@ class HomeScreen extends ConsumerWidget {
                   },
                 ),
               ),
+              const SizedBox(height: 22),
+
+              // ==================== 5. FLASH DEALS ====================
+              _buildSectionHeader(
+                context: context,
+                title: 'Flash Deals',
+                subtitle: 'Special discounts active today only',
+                icon: Icons.bolt,
+                iconColor: const Color(0xFFEF4444),
+                onSeeAll: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(
+                        title: 'Flash Deals',
+                        onlyDeals: true,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalProductList(products: dealProducts),
               const SizedBox(height: 24),
 
-              // ==================== 5. FLASH DEALS / DISCOUNTS ====================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.bolt, color: Color(0xFFEF4444), size: 18),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Flash Deals',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                Text(
-                                  'Special discounts for today only',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+              // ==================== 6. BEST SELLERS ====================
+              _buildSectionHeader(
+                context: context,
+                title: 'Best Sellers',
+                subtitle: 'Most ordered across all categories',
+                icon: Icons.star_rounded,
+                iconColor: const Color(0xFFF59E0B),
+                onSeeAll: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(
+                        title: 'Best Sellers',
+                        onlyBestsellers: true,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ProductListScreen(
-                              title: 'Flash Deals',
-                              onlyDeals: true,
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('See All'),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                height: 275,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: dealProducts.take(6).length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 14),
-                  itemBuilder: (context, index) {
-                    return ProductCard(
-                      product: dealProducts[index],
-                      width: 170,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 26),
+              _buildHorizontalProductList(products: bestSellers),
+              const SizedBox(height: 24),
 
-              // ==================== 6. POPULAR PRODUCTS ====================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Popular Products',
-                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            'Top picks loved by customers',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
+              // ==================== 7. NEW ARRIVALS ====================
+              _buildSectionHeader(
+                context: context,
+                title: 'New Arrivals',
+                subtitle: 'Fresh drops & latest releases',
+                icon: Icons.fiber_new_rounded,
+                iconColor: const Color(0xFF10B981),
+                onSeeAll: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(
+                        title: 'New Arrivals',
+                        onlyNewArrivals: true,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ProductListScreen(
-                              title: 'Popular Products',
-                              onlyFeatured: true,
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('See All'),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                height: 275,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: featuredProducts.take(6).length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 14),
-                  itemBuilder: (context, index) {
-                    return ProductCard(
-                      product: featuredProducts[index],
-                      width: 170,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 26),
+              _buildHorizontalProductList(products: newArrivals),
+              const SizedBox(height: 24),
 
-              // ==================== 7. QUICK BUY AGAIN (Conditional) ====================
+              // ==================== 8. DEALS OF THE DAY ====================
+              _buildSectionHeader(
+                context: context,
+                title: 'Deals of the Day',
+                subtitle: 'Biggest percentage markdowns',
+                icon: Icons.local_fire_department_rounded,
+                iconColor: const Color(0xFFEA580C),
+                onSeeAll: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(
+                        title: 'Deals of the Day',
+                        onlyDealsOfTheDay: true,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalProductList(products: dealsOfTheDay),
+              const SizedBox(height: 24),
+
+              // ==================== 9. POPULAR PRODUCTS ====================
+              _buildSectionHeader(
+                context: context,
+                title: 'Popular Products',
+                subtitle: 'Top rated picks loved by Pakistani customers',
+                icon: Icons.thumb_up_rounded,
+                iconColor: const Color(0xFF6366F1),
+                onSeeAll: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(
+                        title: 'Popular Products',
+                        onlyFeatured: true,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalProductList(products: popularProducts),
+              const SizedBox(height: 24),
+
+              // ==================== 10. QUICK BUY AGAIN (Conditional) ====================
               if (buyAgainProducts.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.replay_rounded, color: Color(0xFF10B981), size: 18),
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.replay_rounded, color: Color(0xFF10B981), size: 18),
+                            Text(
+                              'Buy Again',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Buy Again',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  Text(
-                                    'Quickly reorder your previous favorites',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
+                            Text(
+                              'Quickly reorder your previous items',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
                             ),
                           ],
                         ),
@@ -607,8 +1010,9 @@ class HomeScreen extends ConsumerWidget {
                                 child: SizedBox(
                                   width: 64,
                                   height: 64,
-                                  child: CustomNetworkImage(
+                                  child: ProductImage(
                                     imageUrl: product.image,
+                                    category: product.category,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -679,50 +1083,24 @@ class HomeScreen extends ConsumerWidget {
                     },
                   ),
                 ),
-                const SizedBox(height: 26),
+                const SizedBox(height: 24),
               ],
 
-              // ==================== 8. RECOMMENDED FOR YOU (GRID) ====================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Recommended For You',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            'Curated based on your interests',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
+              // ==================== 11. RECOMMENDED FOR YOU (GRID) ====================
+              _buildSectionHeader(
+                context: context,
+                title: 'Recommended For You',
+                subtitle: 'Personalized based on your browsing interests',
+                onSeeAll: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ProductListScreen(
+                        title: 'Recommended For You',
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ProductListScreen(
-                              title: 'Recommended For You',
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('See All'),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               Padding(
@@ -732,19 +1110,19 @@ class HomeScreen extends ConsumerWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.55,
+                    childAspectRatio: 0.58,
                     crossAxisSpacing: 14,
                     mainAxisSpacing: 14,
                   ),
-                  itemCount: products.length > 8 ? 8 : products.length,
+                  itemCount: recommendedProducts.length > 8 ? 8 : recommendedProducts.length,
                   itemBuilder: (context, index) {
-                    return ProductCard(product: products[index]);
+                    return ProductCard(product: recommendedProducts[index]);
                   },
                 ),
               ),
               const SizedBox(height: 28),
 
-              // ==================== 9. RECENTLY VIEWED ====================
+              // ==================== 12. RECENTLY VIEWED ====================
               if (recentlyViewed.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -777,21 +1155,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 275,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: recentlyViewed.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 14),
-                    itemBuilder: (context, index) {
-                      return ProductCard(
-                        product: recentlyViewed[index],
-                        width: 170,
-                      );
-                    },
-                  ),
-                ),
+                _buildHorizontalProductList(products: recentlyViewed),
                 const SizedBox(height: 28),
               ],
             ],

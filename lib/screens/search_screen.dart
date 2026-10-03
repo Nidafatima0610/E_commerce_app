@@ -16,13 +16,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   final List<String> _popularSuggestions = [
     'Headphones',
-    'Shoes',
+    'iPhone',
+    'Jordan',
+    'Kurta',
+    'Bose',
     'Watch',
-    'Gaming',
-    'Beauty',
-    'Shirt',
-    'Apple',
-    'Nike',
+    'Khaadi',
+    'Airfryer',
+    'Chanel',
+    'Dumbbells',
+    'Osprey',
   ];
 
   @override
@@ -169,12 +172,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               Icon(Icons.search, size: 64, color: Colors.grey[400]),
               const SizedBox(height: 16),
               Text(
-                'Explore the Catalog',
+                'Explore the Marketplace',
                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                'Type a product name, category, or brand above or tap any popular tag.',
+                'Type a product name, brand, or specification, or select a trending keyword above.',
                 style: theme.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
@@ -213,7 +216,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               return ListTile(
                 leading: const Icon(Icons.history, color: Colors.grey, size: 20),
                 title: Text(term, style: const TextStyle(fontWeight: FontWeight.w500)),
-                trailing: const Icon(Icons.north_west, size: 16, color: Colors.grey),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                  onPressed: () {
+                    ref.read(searchHistoryProvider.notifier).removeSearch(term);
+                  },
+                ),
                 onTap: () => _selectSuggestion(term),
               );
             },
@@ -239,7 +247,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'We could not find any matches for "$query".\nTry checking spelling or search with different keywords.',
+                'We could not find any matches for "$query".\nTry checking spelling or search with different keywords like "Sony", "Jordan", "Watch", or "Khaadi".',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium,
               ),
@@ -273,7 +281,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.55,
+              childAspectRatio: 0.58,
               crossAxisSpacing: 14,
               mainAxisSpacing: 14,
             ),

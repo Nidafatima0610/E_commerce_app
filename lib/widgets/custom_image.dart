@@ -28,10 +28,15 @@ class CustomNetworkImage extends StatelessWidget {
         borderRadius: borderRadius,
       ),
       child: Center(
-        child: Icon(
-          fallbackIcon,
-          size: (height != null && height! < 60) ? 20 : 32,
-          color: isDark ? Colors.grey[700] : Colors.grey[400],
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+            ),
+          ),
         ),
       ),
     );
@@ -49,8 +54,8 @@ class CustomNetworkImage extends StatelessWidget {
       child: Center(
         child: Icon(
           fallbackIcon,
-          size: (height != null && height! < 60) ? 20 : 32,
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+          size: (height != null && height! < 60) ? 20 : 30,
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
         ),
       ),
     );
@@ -58,12 +63,13 @@ class CustomNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.isEmpty) {
+    final clean = imageUrl.trim();
+    if (clean.isEmpty || !clean.startsWith('http')) {
       return _buildFallback(context);
     }
 
     Widget imageWidget = Image.network(
-      imageUrl,
+      clean,
       width: width,
       height: height,
       fit: fit,

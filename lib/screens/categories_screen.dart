@@ -25,18 +25,17 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         return Icons.checkroom_outlined;
       case 'shoes':
         return Icons.snowshoeing_outlined;
+      case 'beauty & care':
       case 'beauty':
         return Icons.spa_outlined;
-      case 'home & kitchen':
+      case 'home & living':
         return Icons.kitchen_outlined;
-      case 'accessories':
-        return Icons.shopping_bag_outlined;
+      case 'bags & accessories':
       case 'bags':
         return Icons.backpack_outlined;
       case 'watches':
         return Icons.watch_outlined;
-      case 'gaming':
-        return Icons.sports_esports_outlined;
+      case 'sports & fitness':
       case 'sports':
         return Icons.fitness_center_outlined;
       default:
@@ -56,8 +55,14 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       case 'rating':
         list.sort((a, b) => b.rating.compareTo(a.rating));
         break;
+      case 'popular':
+        list.sort((a, b) => (b.reviewCount * b.rating).compareTo(a.reviewCount * a.rating));
+        break;
       case 'discount':
         list.sort((a, b) => b.discountPercentage.compareTo(a.discountPercentage));
+        break;
+      case 'newest':
+        list.sort((a, b) => (b.isNewArrival ? 1 : 0).compareTo(a.isNewArrival ? 1 : 0));
         break;
       default:
         break;
@@ -71,10 +76,26 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final categories = ref.watch(categoriesProvider);
     final selectedCategory = ref.watch(selectedCategoryProvider);
+    final selectedSubcategory = ref.watch(selectedSubcategoryProvider);
+    final allProducts = ref.watch(productsProvider);
     final rawProducts = ref.watch(filteredProductsProvider);
     final products = _sortProducts(rawProducts);
 
     final allCategories = ['All', ...categories];
+
+    // Determine subcategories for the current selected category
+    List<String> subcategories = [];
+    if (selectedCategory != null && selectedCategory != 'All') {
+      final subcatSet = <String>{};
+      for (final p in allProducts) {
+        if (p.category.toLowerCase() == selectedCategory.toLowerCase() && p.subcategory.isNotEmpty) {
+          subcatSet.add(p.subcategory);
+        }
+      }
+      if (subcatSet.isNotEmpty) {
+        subcategories = ['All', ...subcatSet];
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -96,7 +117,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           // Horizontal Category Selector with Icons
           Container(
             height: 52,
-            margin: const EdgeInsets.symmetric(vertical: 8),
+            margin: const EdgeInsets.symmetric(vertical: 6),
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               scrollDirection: Axis.horizontal,
@@ -107,22 +128,27 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 final isSelected = (selectedCategory == null && cat == 'All') ||
                     (selectedCategory?.toLowerCase() == cat.toLowerCase());
 
+                final count = cat == 'All'
+                    ? allProducts.length
+                    : allProducts.where((p) => p.category.toLowerCase() == cat.toLowerCase()).length;
+
                 return FilterChip(
                   avatar: Icon(
                     _getCategoryIcon(cat),
                     size: 16,
                     color: isSelected ? Colors.white : theme.colorScheme.primary,
                   ),
-                  label: Text(cat),
+                  label: Text('$cat ($count)'),
                   selected: isSelected,
                   onSelected: (selected) {
                     ref.read(selectedCategoryProvider.notifier).update(cat == 'All' ? null : cat);
+                    ref.read(selectedSubcategoryProvider.notifier).update(null);
                   },
                   selectedColor: theme.colorScheme.primary,
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 12.5,
+                    fontSize: 12,
                   ),
                   backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
                   side: BorderSide(
@@ -137,6 +163,46 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ),
           ),
 
+          // Subcategories bar (if category selected)
+          if (subcategories.length > 1)
+            Container(
+              height: 36,
+              margin: const EdgeInsets.only(bottom: 6),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: subcategories.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final subcat = subcategories[index];
+                  final isSelected = (selectedSubcategory == null && subcat == 'All') ||
+                      (selectedSubcategory?.toLowerCase() == subcat.toLowerCase());
+
+                  return FilterChip(
+                    label: Text(subcat),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      ref.read(selectedSubcategoryProvider.notifier).update(subcat == 'All' ? null : subcat);
+                    },
+                    selectedColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+                    labelStyle: TextStyle(
+                      color: isSelected ? theme.colorScheme.primary : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 11.5,
+                    ),
+                    backgroundColor: Colors.transparent,
+                    side: BorderSide(
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : (isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                    ),
+                    showCheckmark: false,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  );
+                },
+              ),
+            ),
+
           // Subheader: count and sort
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -147,43 +213,65 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   child: Text(
                     selectedCategory == null || selectedCategory == 'All'
                         ? 'All Products (${products.length})'
-                        : '$selectedCategory (${products.length})',
+                        : selectedSubcategory != null
+                            ? '$selectedSubcategory (${products.length})'
+                            : '$selectedCategory (${products.length})',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
-                PopupMenuButton<String>(
-                  initialValue: _sortOption,
-                  onSelected: (val) => setState(() => _sortOption = val),
-                  child: Row(
-                    children: [
-                      Icon(Icons.tune, size: 16, color: theme.colorScheme.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        _getSortText(_sortOption),
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _sortOption,
+                    isDense: true,
+                    borderRadius: BorderRadius.circular(12),
+                    icon: const Icon(Icons.arrow_drop_down, size: 20),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'default',
+                        child: Text('Default', style: TextStyle(fontSize: 12.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'popular',
+                        child: Text('Most Popular', style: TextStyle(fontSize: 12.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'price_low',
+                        child: Text('Price: Low to High', style: TextStyle(fontSize: 12.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'price_high',
+                        child: Text('Price: High to Low', style: TextStyle(fontSize: 12.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'rating',
+                        child: Text('Highest Rated', style: TextStyle(fontSize: 12.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'discount',
+                        child: Text('Biggest Discount', style: TextStyle(fontSize: 12.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'newest',
+                        child: Text('Newest First', style: TextStyle(fontSize: 12.5)),
                       ),
                     ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _sortOption = value);
+                      }
+                    },
                   ),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'default', child: Text('Default')),
-                    PopupMenuItem(value: 'price_low', child: Text('Price: Low to High')),
-                    PopupMenuItem(value: 'price_high', child: Text('Price: High to Low')),
-                    PopupMenuItem(value: 'rating', child: Text('Highest Rated')),
-                    PopupMenuItem(value: 'discount', child: Text('Biggest Discounts')),
-                  ],
                 ),
               ],
             ),
           ),
           const Divider(height: 1),
 
-          // 2-Column Responsive Product Grid
+          // Main Product Grid
           Expanded(
             child: products.isEmpty
                 ? Center(
@@ -192,24 +280,25 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.category_outlined, size: 70, color: Colors.grey[400]),
+                          Icon(Icons.category_outlined, size: 64, color: Colors.grey[400]),
                           const SizedBox(height: 16),
-                          Text(
-                            'No products in this category',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          const Text(
+                            'No Products in this Category',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Please check back later or view all products.',
-                            style: theme.textTheme.bodyMedium,
+                            'Explore other categories or view all products.',
                             textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () {
                               ref.read(selectedCategoryProvider.notifier).update(null);
+                              ref.read(selectedSubcategoryProvider.notifier).update(null);
                             },
-                            child: const Text('Show All Products'),
+                            child: const Text('View All Products'),
                           ),
                         ],
                       ),
@@ -219,7 +308,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                     padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      childAspectRatio: 0.55,
+                      childAspectRatio: 0.58,
                       crossAxisSpacing: 14,
                       mainAxisSpacing: 14,
                     ),
@@ -232,20 +321,5 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         ],
       ),
     );
-  }
-
-  String _getSortText(String option) {
-    switch (option) {
-      case 'price_low':
-        return 'Price: Low';
-      case 'price_high':
-        return 'Price: High';
-      case 'rating':
-        return 'Top Rated';
-      case 'discount':
-        return 'Discounts';
-      default:
-        return 'Sort by';
-    }
   }
 }

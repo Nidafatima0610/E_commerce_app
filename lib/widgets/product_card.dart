@@ -4,7 +4,7 @@ import '../models/product.dart';
 import '../providers/app_providers.dart';
 import '../screens/product_details_screen.dart';
 import '../core/currency_format.dart';
-import 'custom_image.dart';
+import 'product_image.dart';
 
 class ProductCard extends ConsumerWidget {
   final Product product;
@@ -17,7 +17,23 @@ class ProductCard extends ConsumerWidget {
   });
 
   Widget? _buildBadge(Product product) {
-    if (product.discountPercentage > 0) {
+    if (product.isOutOfStock) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Text(
+          'Out of Stock',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    } else if (product.discountPercentage > 0) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
         decoration: BoxDecoration(
@@ -41,7 +57,7 @@ class ProductCard extends ConsumerWidget {
           ),
         ),
       );
-    } else if (product.reviewCount > 1500) {
+    } else if (product.isBestseller) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
         decoration: BoxDecoration(
@@ -64,7 +80,30 @@ class ProductCard extends ConsumerWidget {
           ),
         ),
       );
-    } else if (product.availableStock <= 35) {
+    } else if (product.isNewArrival) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10B981),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Text(
+          'New Arrival',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    } else if (product.isLowStock) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
         decoration: BoxDecoration(
@@ -103,29 +142,6 @@ class ProductCard extends ConsumerWidget {
         ),
         child: const Text(
           'Top Rated',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
-    } else if (product.isFeatured) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-        decoration: BoxDecoration(
-          color: const Color(0xFF10B981),
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF10B981).withValues(alpha: 0.35),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Text(
-          'Popular',
           style: TextStyle(
             color: Colors.white,
             fontSize: 9.5,
@@ -181,8 +197,9 @@ class ProductCard extends ConsumerWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CustomNetworkImage(
+                  ProductImage(
                     imageUrl: product.image,
+                    category: product.category,
                     fit: BoxFit.cover,
                   ),
                   // Smart Badge
@@ -300,7 +317,7 @@ class ProductCard extends ConsumerWidget {
                       ],
                     ),
 
-                    // Bottom Section: Current price, Old price, Add-to-cart
+                    // Bottom Section: Current price, Old price, Quick Add-to-cart
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -335,20 +352,22 @@ class ProductCard extends ConsumerWidget {
                           ),
                         ),
                         Material(
-                          color: theme.colorScheme.primary,
+                          color: product.isOutOfStock ? Colors.grey[400] : theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(8),
                           child: InkWell(
-                            onTap: () {
-                              ref.read(cartProvider.notifier).addItem(product);
-                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Added ${product.name} to cart'),
-                                  duration: const Duration(milliseconds: 1400),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
+                            onTap: product.isOutOfStock
+                                ? null
+                                : () {
+                                    ref.read(cartProvider.notifier).addItem(product);
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Added ${product.name} to cart'),
+                                        duration: const Duration(milliseconds: 1400),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
                             borderRadius: BorderRadius.circular(8),
                             child: const Padding(
                               padding: EdgeInsets.all(6),

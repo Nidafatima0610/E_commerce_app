@@ -1,16 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/coupon.dart';
 import '../models/address.dart';
 import '../core/storage_service.dart';
-import '../models/dummy_data.dart';
+import '../repositories/product_repository.dart';
+import '../repositories/category_repository.dart';
+import '../repositories/cart_repository.dart';
+import '../repositories/wishlist_repository.dart';
+import '../repositories/order_repository.dart';
+import '../repositories/user_repository.dart';
 
-// Navigation tab provider
+// ==================== REPOSITORY PROVIDERS ====================
+
+final productRepositoryProvider = Provider<ProductRepository>((ref) {
+  return LocalProductRepository();
+});
+
+final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
+  return LocalCategoryRepository();
+});
+
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError('SharedPreferences not initialized');
+});
+
+final storageServiceProvider = Provider<LocalStorageService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LocalStorageService(prefs);
+});
+
+final cartRepositoryProvider = Provider<CartRepository>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LocalCartRepository(prefs);
+});
+
+final wishlistRepositoryProvider = Provider<WishlistRepository>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LocalWishlistRepository(prefs);
+});
+
+final orderRepositoryProvider = Provider<OrderRepository>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LocalOrderRepository(prefs);
+});
+
+final userRepositoryProvider = Provider<UserRepository>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return LocalUserRepository(storage);
+});
+
+// ==================== CORE PRODUCT & CATEGORY PROVIDERS ====================
+
+final productsProvider = Provider<List<Product>>((ref) {
+  return ref.watch(productRepositoryProvider).getAllProducts();
+});
+
+final categoriesProvider = Provider<List<String>>((ref) {
+  return ref.watch(productRepositoryProvider).getAllCategories();
+});
+
+final categoryItemsProvider = Provider<List<CategoryItem>>((ref) {
+  return ref.watch(categoryRepositoryProvider).getCategories();
+});
+
+// Specialized product catalog slices for Home Screen
+final featuredProductsProvider = Provider<List<Product>>((ref) {
+  return ref.watch(productRepositoryProvider).getFeaturedProducts();
+});
+
+final dealProductsProvider = Provider<List<Product>>((ref) {
+  return ref.watch(productRepositoryProvider).getDeals();
+});
+
+final bestsellerProductsProvider = Provider<List<Product>>((ref) {
+  return ref.watch(productRepositoryProvider).getBestSellers();
+});
+
+final newArrivalProductsProvider = Provider<List<Product>>((ref) {
+  return ref.watch(productRepositoryProvider).getNewArrivals();
+});
+
+final dealsOfTheDayProvider = Provider<List<Product>>((ref) {
+  return ref.watch(productRepositoryProvider).getDealsOfTheDay();
+});
+
+final recommendedProductsProvider = Provider<List<Product>>((ref) {
+  final category = ref.watch(selectedCategoryProvider);
+  final viewed = ref.watch(recentlyViewedProvider);
+  return ref.watch(productRepositoryProvider).getRecommendedProducts(
+    preferredCategory: category,
+    viewedIds: viewed.map((p) => p.id).toList(),
+    limit: 12,
+  );
+});
+
+// ==================== NAVIGATION & STATE PROVIDERS ====================
+
 class BottomNavIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -19,27 +108,31 @@ class BottomNavIndexNotifier extends Notifier<int> {
 
 final bottomNavIndexProvider = NotifierProvider<BottomNavIndexNotifier, int>(() => BottomNavIndexNotifier());
 
-final productsProvider = Provider<List<Product>>((ref) => dummyProducts);
-
-final categoriesProvider = Provider<List<String>>((ref) {
-  final products = ref.watch(productsProvider);
-  final Set<String> categories = {};
-  for (final p in products) {
-    categories.add(p.category);
+// Delivery City Selection (Pakistani Context)
+class DeliveryCityNotifier extends Notifier<String> {
+  @override
+  String build() {
+    final storage = ref.read(storageServiceProvider);
+    return storage.getString('selected_city') ?? 'Gulberg, Lahore';
   }
-  return categories.toList();
-});
 
-// Shared Preferences Provider
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('SharedPreferences not initialized');
-});
+  void setCity(String city) {
+    state = city;
+    ref.read(storageServiceProvider).saveString('selected_city', city);
+  }
+}
 
-// Storage Service Provider
-final storageServiceProvider = Provider<LocalStorageService>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return LocalStorageService(prefs);
-});
+final deliveryCityProvider = NotifierProvider<DeliveryCityNotifier, String>(() => DeliveryCityNotifier());
+
+// Notification Badge Provider
+class NotificationCountNotifier extends Notifier<int> {
+  @override
+  int build() => 2; // Initial welcome promotions
+  void markAllAsRead() => state = 0;
+  void addNotification() => state++;
+}
+
+final notificationCountProvider = NotifierProvider<NotificationCountNotifier, int>(() => NotificationCountNotifier());
 
 // Applied Coupon Provider
 class AppliedCouponNotifier extends Notifier<Coupon?> {
@@ -50,7 +143,8 @@ class AppliedCouponNotifier extends Notifier<Coupon?> {
 
 final appliedCouponProvider = NotifierProvider<AppliedCouponNotifier, Coupon?>(() => AppliedCouponNotifier());
 
-// Cart Provider
+// ==================== CART & SAVE FOR LATER PROVIDERS ====================
+
 class CartNotifier extends Notifier<List<CartItem>> {
   @override
   List<CartItem> build() {
@@ -58,52 +152,33 @@ class CartNotifier extends Notifier<List<CartItem>> {
     return [];
   }
 
-  void _loadCart() {
-    final prefs = ref.read(sharedPreferencesProvider);
-    final String? cartData = prefs.getString('cart');
-    if (cartData != null) {
-      try {
-        final List<dynamic> decoded = jsonDecode(cartData);
-        state = decoded.map((e) {
-          final pData = e['product'];
-          final product = dummyProducts.firstWhere(
-            (p) => p.id == pData['id'],
-            orElse: () => dummyProducts.first,
-          );
-          return CartItem(
-            id: e['id'],
-            product: product,
-            quantity: e['quantity'],
-          );
-        }).toList();
-      } catch (e) {
-        state = [];
-      }
-    }
+  void _loadCart() async {
+    final repo = ref.read(cartRepositoryProvider);
+    final products = ref.read(productsProvider);
+    state = await repo.loadCart(products);
   }
 
   void _saveCart() {
-    final prefs = ref.read(sharedPreferencesProvider);
-    final String encoded = jsonEncode(state.map((item) => {
-      'id': item.id,
-      'quantity': item.quantity,
-      'product': {'id': item.product.id},
-    }).toList());
-    prefs.setString('cart', encoded);
+    final repo = ref.read(cartRepositoryProvider);
+    repo.saveCart(state);
   }
 
-  void addItem(Product product) {
+  void addItem(Product product, {int quantity = 1}) {
     final existingIndex = state.indexWhere((item) => item.product.id == product.id);
     if (existingIndex >= 0) {
       final updatedCart = List<CartItem>.from(state);
       updatedCart[existingIndex] = updatedCart[existingIndex].copyWith(
-        quantity: updatedCart[existingIndex].quantity + 1,
+        quantity: updatedCart[existingIndex].quantity + quantity,
       );
       state = updatedCart;
     } else {
       state = [
         ...state,
-        CartItem(id: DateTime.now().millisecondsSinceEpoch.toString(), product: product)
+        CartItem(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          product: product,
+          quantity: quantity,
+        )
       ];
     }
     _saveCart();
@@ -148,7 +223,53 @@ final cartProvider = NotifierProvider<CartNotifier, List<CartItem>>(() {
   return CartNotifier();
 });
 
-// Recently Viewed Provider
+// Save For Later Provider
+class SavedForLaterNotifier extends Notifier<List<Product>> {
+  @override
+  List<Product> build() {
+    _loadSaved();
+    return [];
+  }
+
+  void _loadSaved() async {
+    final repo = ref.read(cartRepositoryProvider);
+    final products = ref.read(productsProvider);
+    state = await repo.loadSavedForLater(products);
+  }
+
+  void _persist() {
+    final repo = ref.read(cartRepositoryProvider);
+    repo.saveSavedForLater(state);
+  }
+
+  void saveForLater(CartItem cartItem) {
+    // Add to saved for later
+    if (!state.any((p) => p.id == cartItem.product.id)) {
+      state = [...state, cartItem.product];
+      _persist();
+    }
+    // Remove from cart
+    ref.read(cartProvider.notifier).removeItem(cartItem.id);
+  }
+
+  void moveToCart(Product product) {
+    state = state.where((p) => p.id != product.id).toList();
+    _persist();
+    ref.read(cartProvider.notifier).addItem(product);
+  }
+
+  void removeSaved(String productId) {
+    state = state.where((p) => p.id != productId).toList();
+    _persist();
+  }
+}
+
+final savedForLaterProvider = NotifierProvider<SavedForLaterNotifier, List<Product>>(() {
+  return SavedForLaterNotifier();
+});
+
+// ==================== RECENTLY VIEWED PROVIDER ====================
+
 class RecentlyViewedNotifier extends Notifier<List<Product>> {
   @override
   List<Product> build() {
@@ -158,11 +279,12 @@ class RecentlyViewedNotifier extends Notifier<List<Product>> {
 
   void _loadRecentlyViewed() {
     final storage = ref.read(storageServiceProvider);
+    final products = ref.read(productsProvider);
     final data = storage.getJson('recently_viewed');
-    if (data != null && data is List) {
-      state = data.map((id) => dummyProducts.firstWhere(
+    if (data != null && data is List && products.isNotEmpty) {
+      state = data.map((id) => products.firstWhere(
         (p) => p.id == id,
-        orElse: () => dummyProducts.first,
+        orElse: () => products.first,
       )).toList();
     }
   }
@@ -171,11 +293,11 @@ class RecentlyViewedNotifier extends Notifier<List<Product>> {
     final storage = ref.read(storageServiceProvider);
     var current = state.where((p) => p.id != product.id).toList();
     current.insert(0, product);
-    if (current.length > 10) current = current.sublist(0, 10);
+    if (current.length > 15) current = current.sublist(0, 15);
     state = current;
     storage.saveJson('recently_viewed', state.map((p) => p.id).toList());
   }
-  
+
   void clear() {
     state = [];
     ref.read(storageServiceProvider).saveJson('recently_viewed', []);
@@ -186,7 +308,8 @@ final recentlyViewedProvider = NotifierProvider<RecentlyViewedNotifier, List<Pro
   return RecentlyViewedNotifier();
 });
 
-// Wishlist Provider
+// ==================== WISHLIST PROVIDER ====================
+
 class WishlistNotifier extends Notifier<List<Product>> {
   @override
   List<Product> build() {
@@ -194,28 +317,15 @@ class WishlistNotifier extends Notifier<List<Product>> {
     return [];
   }
 
-  void _loadWishlist() {
-    final prefs = ref.read(sharedPreferencesProvider);
-    final String? wishlistData = prefs.getString('wishlist');
-    if (wishlistData != null) {
-      try {
-        final List<dynamic> decoded = jsonDecode(wishlistData);
-        state = decoded.map((e) {
-          return dummyProducts.firstWhere(
-            (p) => p.id == e['id'],
-            orElse: () => dummyProducts.first,
-          );
-        }).toList();
-      } catch (e) {
-        state = [];
-      }
-    }
+  void _loadWishlist() async {
+    final repo = ref.read(wishlistRepositoryProvider);
+    final products = ref.read(productsProvider);
+    state = await repo.loadWishlist(products);
   }
 
   void _saveWishlist() {
-    final prefs = ref.read(sharedPreferencesProvider);
-    final String encoded = jsonEncode(state.map((p) => {'id': p.id}).toList());
-    prefs.setString('wishlist', encoded);
+    final repo = ref.read(wishlistRepositoryProvider);
+    repo.saveWishlist(state);
   }
 
   void toggleWishlist(Product product) {
@@ -236,56 +346,27 @@ final wishlistProvider = NotifierProvider<WishlistNotifier, List<Product>>(() {
   return WishlistNotifier();
 });
 
-// Orders Provider
+// ==================== ORDERS PROVIDER ====================
+
 class OrdersNotifier extends Notifier<List<Order>> {
   @override
   List<Order> build() {
-    return [
-      Order(
-        id: 'ORD-98241',
-        items: [
-          CartItem(id: 'c1', product: dummyProducts[0], quantity: 1),
-          CartItem(id: 'c2', product: dummyProducts[31], quantity: 1),
-        ],
-        totalAmount: 31998.0,
-        date: DateTime.now().subtract(const Duration(days: 2)),
-        status: 'Delivered',
-        paymentMethod: 'Cash on Delivery',
-        deliveryAddress: const Address(
-          id: 'addr_default',
-          name: 'Umair',
-          street: 'House 14-B, Street 5, Sector F-7/2',
-          city: 'Islamabad',
-          state: 'ICT',
-          zipCode: '44000',
-          country: 'Pakistan',
-          isDefault: true,
-        ),
-      ),
-      Order(
-        id: 'ORD-97430',
-        items: [
-          CartItem(id: 'c3', product: dummyProducts[8], quantity: 2),
-        ],
-        totalAmount: 6998.0,
-        date: DateTime.now().subtract(const Duration(days: 8)),
-        status: 'Shipped',
-        paymentMethod: 'JazzCash',
-        deliveryAddress: const Address(
-          id: 'addr_default',
-          name: 'Umair',
-          street: 'House 14-B, Street 5, Sector F-7/2',
-          city: 'Islamabad',
-          state: 'ICT',
-          zipCode: '44000',
-          country: 'Pakistan',
-          isDefault: true,
-        ),
-      ),
-    ];
+    _loadOrders();
+    return [];
   }
 
-  void addOrder(List<CartItem> items, double totalAmount, {Address? address, String paymentMethod = 'Cash on Delivery'}) {
+  void _loadOrders() async {
+    final repo = ref.read(orderRepositoryProvider);
+    final products = ref.read(productsProvider);
+    state = await repo.getOrders(products);
+  }
+
+  void addOrder(
+    List<CartItem> items,
+    double totalAmount, {
+    Address? address,
+    String paymentMethod = 'Cash on Delivery',
+  }) {
     final newOrder = Order(
       id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       items: List.from(items),
@@ -296,6 +377,7 @@ class OrdersNotifier extends Notifier<List<Order>> {
       paymentMethod: paymentMethod,
     );
     state = [newOrder, ...state];
+    ref.read(orderRepositoryProvider).saveOrders(state);
   }
 }
 
@@ -303,38 +385,16 @@ final ordersProvider = NotifierProvider<OrdersNotifier, List<Order>>(() {
   return OrdersNotifier();
 });
 
-// Addresses Provider
+// ==================== ADDRESSES PROVIDER ====================
+
 class AddressesNotifier extends Notifier<List<Address>> {
   @override
   List<Address> build() {
-    _loadAddresses();
-    return [];
+    return ref.read(userRepositoryProvider).getAddresses();
   }
 
-  void _loadAddresses() {
-    final storage = ref.read(storageServiceProvider);
-    final data = storage.getJson('addresses');
-    if (data != null && data is List && data.isNotEmpty) {
-      state = data.map((e) => Address.fromJson(Map<String, dynamic>.from(e))).toList();
-    } else {
-      state = const [
-        Address(
-          id: 'addr_default',
-          name: 'Umair',
-          street: 'House 14-B, Street 5, Sector F-7/2',
-          city: 'Islamabad',
-          state: 'ICT',
-          zipCode: '44000',
-          country: 'Pakistan',
-          isDefault: true,
-        ),
-      ];
-    }
-  }
-
-  void _saveAddresses() {
-    final storage = ref.read(storageServiceProvider);
-    storage.saveJson('addresses', state.map((a) => a.toJson()).toList());
+  void _save() {
+    ref.read(userRepositoryProvider).saveAddresses(state);
   }
 
   void addAddress(Address address) {
@@ -345,17 +405,17 @@ class AddressesNotifier extends Notifier<List<Address>> {
     if (state.length == 1) {
       state = [state.first.copyWith(isDefault: true)];
     }
-    _saveAddresses();
+    _save();
   }
 
   void removeAddress(String id) {
     state = state.where((a) => a.id != id).toList();
-    _saveAddresses();
+    _save();
   }
 
   void setDefaultAddress(String id) {
     state = state.map((a) => a.copyWith(isDefault: a.id == id)).toList();
-    _saveAddresses();
+    _save();
   }
 }
 
@@ -363,7 +423,8 @@ final addressesProvider = NotifierProvider<AddressesNotifier, List<Address>>(() 
   return AddressesNotifier();
 });
 
-// Search History Provider
+// ==================== SEARCH & FILTER PROVIDERS ====================
+
 class SearchHistoryNotifier extends Notifier<List<String>> {
   @override
   List<String> build() {
@@ -379,6 +440,11 @@ class SearchHistoryNotifier extends Notifier<List<String>> {
     ref.read(storageServiceProvider).saveStringList('search_history', state);
   }
 
+  void removeSearch(String query) {
+    state = state.where((q) => q.toLowerCase() != query.toLowerCase()).toList();
+    ref.read(storageServiceProvider).saveStringList('search_history', state);
+  }
+
   void clearHistory() {
     state = [];
     ref.read(storageServiceProvider).saveStringList('search_history', []);
@@ -389,49 +455,56 @@ final searchHistoryProvider = NotifierProvider<SearchHistoryNotifier, List<Strin
   return SearchHistoryNotifier();
 });
 
-// Search State
 class SearchQueryNotifier extends Notifier<String> {
   @override
   String build() => '';
   void update(String query) => state = query;
 }
+
 final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(() => SearchQueryNotifier());
 
-// Selected Category State
 class SelectedCategoryNotifier extends Notifier<String?> {
   @override
   String? build() => null;
   void update(String? category) => state = category;
 }
+
 final selectedCategoryProvider = NotifierProvider<SelectedCategoryNotifier, String?>(() => SelectedCategoryNotifier());
 
-// Search Results (Searches entire catalog)
+class SelectedSubcategoryNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void update(String? subcat) => state = subcat;
+}
+
+final selectedSubcategoryProvider = NotifierProvider<SelectedSubcategoryNotifier, String?>(() => SelectedSubcategoryNotifier());
+
+// Search Results (Deep tokenized search across all product attributes)
 final searchResultsProvider = Provider<List<Product>>((ref) {
-  final products = ref.watch(productsProvider);
-  final query = ref.watch(searchQueryProvider).toLowerCase().trim();
-
-  if (query.isEmpty) return [];
-
-  return products.where((p) {
-    return p.name.toLowerCase().contains(query) || 
-           p.description.toLowerCase().contains(query) ||
-           p.brand.toLowerCase().contains(query) ||
-           p.category.toLowerCase().contains(query);
-  }).toList();
+  final repo = ref.watch(productRepositoryProvider);
+  final query = ref.watch(searchQueryProvider);
+  return repo.searchProducts(query);
 });
 
-// Filtered Products (For category browsing)
+// Filtered Products (For category & subcategory browsing)
 final filteredProductsProvider = Provider<List<Product>>((ref) {
-  final products = ref.watch(productsProvider);
+  final repo = ref.watch(productRepositoryProvider);
   final category = ref.watch(selectedCategoryProvider);
+  final subcategory = ref.watch(selectedSubcategoryProvider);
 
   if (category == null || category.isEmpty || category == 'All') {
-    return products;
+    return repo.getAllProducts();
   }
-  return products.where((p) => p.category.toLowerCase() == category.toLowerCase()).toList();
+
+  if (subcategory != null && subcategory.isNotEmpty && subcategory != 'All') {
+    return repo.getBySubcategory(category, subcategory);
+  }
+
+  return repo.getByCategory(category);
 });
 
-// Theme Mode Provider
+// ==================== THEME MODE PROVIDER ====================
+
 class ThemeModeNotifier extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
@@ -448,7 +521,8 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(() => ThemeModeNotifier());
 
-// Compare Provider (supports up to 3 products)
+// ==================== PRODUCT COMPARISON PROVIDER ====================
+
 class CompareNotifier extends Notifier<List<Product>> {
   @override
   List<Product> build() => [];
@@ -481,7 +555,8 @@ class CompareNotifier extends Notifier<List<Product>> {
 
 final compareProvider = NotifierProvider<CompareNotifier, List<Product>>(() => CompareNotifier());
 
-// User Profile Model & Provider
+// ==================== USER PROFILE PROVIDER ====================
+
 class UserProfile {
   final String name;
   final String email;
@@ -522,4 +597,3 @@ class UserProfileNotifier extends Notifier<UserProfile> {
 }
 
 final userProfileProvider = NotifierProvider<UserProfileNotifier, UserProfile>(() => UserProfileNotifier());
-
