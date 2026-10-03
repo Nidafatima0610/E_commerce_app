@@ -7,51 +7,43 @@ import 'wishlist_screen.dart';
 import 'profile_screen.dart';
 import '../providers/app_providers.dart';
 
-class MainNavScreen extends ConsumerStatefulWidget {
+class MainNavScreen extends ConsumerWidget {
   const MainNavScreen({super.key});
 
-  @override
-  ConsumerState<MainNavScreen> createState() => _MainNavScreenState();
-}
-
-class _MainNavScreenState extends ConsumerState<MainNavScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const CategoriesScreen(),
-    const CartScreen(),
-    const WishlistScreen(),
-    const ProfileScreen(),
+  final List<Widget> _screens = const [
+    HomeScreen(),
+    CategoriesScreen(),
+    CartScreen(),
+    WishlistScreen(),
+    ProfileScreen(),
   ];
 
   @override
-  Widget build(BuildContext context) {
-
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIndex = ref.watch(bottomNavIndexProvider);
     final cartItems = ref.watch(cartProvider);
     final totalCount = cartItems.fold(0, (sum, item) => sum + item.quantity);
+    final wishlist = ref.watch(wishlistProvider);
 
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: currentIndex,
         children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
+        currentIndex: currentIndex,
         onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+          ref.read(bottomNavIndexProvider.notifier).setIndex(index);
         },
         items: [
           const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+            activeIcon: Icon(Icons.home_rounded),
             label: 'Home',
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.grid_view_outlined),
-            activeIcon: Icon(Icons.grid_view),
+            activeIcon: Icon(Icons.grid_view_rounded),
             label: 'Categories',
           ),
           BottomNavigationBarItem(
@@ -63,18 +55,26 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
             activeIcon: Badge(
               isLabelVisible: totalCount > 0,
               label: Text(totalCount.toString()),
-              child: const Icon(Icons.shopping_cart),
+              child: const Icon(Icons.shopping_cart_rounded),
             ),
             label: 'Cart',
           ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_outline),
-            activeIcon: Icon(Icons.favorite),
+          BottomNavigationBarItem(
+            icon: Badge(
+              isLabelVisible: wishlist.isNotEmpty,
+              label: Text(wishlist.length.toString()),
+              child: const Icon(Icons.favorite_outline_rounded),
+            ),
+            activeIcon: Badge(
+              isLabelVisible: wishlist.isNotEmpty,
+              label: Text(wishlist.length.toString()),
+              child: const Icon(Icons.favorite_rounded),
+            ),
             label: 'Wishlist',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
+            icon: Icon(Icons.person_outline_rounded),
+            activeIcon: Icon(Icons.person_rounded),
             label: 'Profile',
           ),
         ],

@@ -8,14 +8,26 @@ import '../models/order.dart';
 import '../models/coupon.dart';
 import '../models/address.dart';
 import '../core/storage_service.dart';
-
 import '../models/dummy_data.dart';
+
+// Navigation tab provider
+class BottomNavIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void setIndex(int index) => state = index;
+}
+
+final bottomNavIndexProvider = NotifierProvider<BottomNavIndexNotifier, int>(() => BottomNavIndexNotifier());
 
 final productsProvider = Provider<List<Product>>((ref) => dummyProducts);
 
 final categoriesProvider = Provider<List<String>>((ref) {
   final products = ref.watch(productsProvider);
-  return products.map((p) => p.category).toSet().toList();
+  final Set<String> categories = {};
+  for (final p in products) {
+    categories.add(p.category);
+  }
+  return categories.toList();
 });
 
 // Shared Preferences Provider
@@ -35,6 +47,7 @@ class AppliedCouponNotifier extends Notifier<Coupon?> {
   Coupon? build() => null;
   void update(Coupon? coupon) => state = coupon;
 }
+
 final appliedCouponProvider = NotifierProvider<AppliedCouponNotifier, Coupon?>(() => AppliedCouponNotifier());
 
 // Cart Provider
@@ -173,7 +186,6 @@ final recentlyViewedProvider = NotifierProvider<RecentlyViewedNotifier, List<Pro
   return RecentlyViewedNotifier();
 });
 
-
 // Wishlist Provider
 class WishlistNotifier extends Notifier<List<Product>> {
   @override
@@ -228,15 +240,38 @@ final wishlistProvider = NotifierProvider<WishlistNotifier, List<Product>>(() {
 class OrdersNotifier extends Notifier<List<Order>> {
   @override
   List<Order> build() {
-    return [];
+    return [
+      Order(
+        id: 'ORD-98241',
+        items: [
+          CartItem(id: 'c1', product: dummyProducts[0], quantity: 1),
+          CartItem(id: 'c2', product: dummyProducts[31], quantity: 1),
+        ],
+        totalAmount: 748.99,
+        date: DateTime.now().subtract(const Duration(days: 2)),
+        status: 'Delivered',
+        paymentMethod: 'Credit Card',
+      ),
+      Order(
+        id: 'ORD-97430',
+        items: [
+          CartItem(id: 'c3', product: dummyProducts[8], quantity: 2),
+        ],
+        totalAmount: 130.00,
+        date: DateTime.now().subtract(const Duration(days: 8)),
+        status: 'Shipped',
+        paymentMethod: 'Apple Pay',
+      ),
+    ];
   }
 
   void addOrder(List<CartItem> items, double totalAmount, {Address? address, String paymentMethod = 'Credit Card'}) {
     final newOrder = Order(
-      id: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
+      id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       items: List.from(items),
       totalAmount: totalAmount,
       date: DateTime.now(),
+      status: 'Confirmed',
       deliveryAddress: address,
       paymentMethod: paymentMethod,
     );
@@ -259,8 +294,21 @@ class AddressesNotifier extends Notifier<List<Address>> {
   void _loadAddresses() {
     final storage = ref.read(storageServiceProvider);
     final data = storage.getJson('addresses');
-    if (data != null && data is List) {
+    if (data != null && data is List && data.isNotEmpty) {
       state = data.map((e) => Address.fromJson(Map<String, dynamic>.from(e))).toList();
+    } else {
+      state = const [
+        Address(
+          id: 'addr_default',
+          name: 'Umair',
+          street: '452 Market Street, Suite 300',
+          city: 'San Francisco',
+          state: 'CA',
+          zipCode: '94105',
+          country: 'United States',
+          isDefault: true,
+        ),
+      ];
     }
   }
 
@@ -299,8 +347,8 @@ class SearchHistoryNotifier extends Notifier<List<String>> {
 
   void addSearch(String query) {
     if (query.trim().isEmpty) return;
-    var current = state.where((q) => q != query).toList();
-    current.insert(0, query);
+    var current = state.where((q) => q.toLowerCase() != query.toLowerCase()).toList();
+    current.insert(0, query.trim());
     if (current.length > 10) current = current.sublist(0, 10);
     state = current;
     ref.read(storageServiceProvider).saveStringList('search_history', state);
@@ -316,7 +364,7 @@ final searchHistoryProvider = NotifierProvider<SearchHistoryNotifier, List<Strin
   return SearchHistoryNotifier();
 });
 
-// Search and Filter State
+// Search State
 class SearchQueryNotifier extends Notifier<String> {
   @override
   String build() => '';
@@ -324,6 +372,7 @@ class SearchQueryNotifier extends Notifier<String> {
 }
 final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(() => SearchQueryNotifier());
 
+// Selected Category State
 class SelectedCategoryNotifier extends Notifier<String?> {
   @override
   String? build() => null;
@@ -331,17 +380,30 @@ class SelectedCategoryNotifier extends Notifier<String?> {
 }
 final selectedCategoryProvider = NotifierProvider<SelectedCategoryNotifier, String?>(() => SelectedCategoryNotifier());
 
-final filteredProductsProvider = Provider<List<Product>>((ref) {
+// Search Results (Searches entire catalog)
+final searchResultsProvider = Provider<List<Product>>((ref) {
   final products = ref.watch(productsProvider);
-  final query = ref.watch(searchQueryProvider).toLowerCase();
-  final category = ref.watch(selectedCategoryProvider);
+  final query = ref.watch(searchQueryProvider).toLowerCase().trim();
+
+  if (query.isEmpty) return [];
 
   return products.where((p) {
-    final matchesQuery = p.name.toLowerCase().contains(query) || 
-                         p.description.toLowerCase().contains(query);
-    final matchesCategory = category == null || p.category == category;
-    return matchesQuery && matchesCategory;
+    return p.name.toLowerCase().contains(query) || 
+           p.description.toLowerCase().contains(query) ||
+           p.brand.toLowerCase().contains(query) ||
+           p.category.toLowerCase().contains(query);
   }).toList();
+});
+
+// Filtered Products (For category browsing)
+final filteredProductsProvider = Provider<List<Product>>((ref) {
+  final products = ref.watch(productsProvider);
+  final category = ref.watch(selectedCategoryProvider);
+
+  if (category == null || category.isEmpty || category == 'All') {
+    return products;
+  }
+  return products.where((p) => p.category.toLowerCase() == category.toLowerCase()).toList();
 });
 
 // Theme Mode Provider

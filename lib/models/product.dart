@@ -6,6 +6,8 @@ class Product {
   final double? oldPrice;
   final String image;
   final String category;
+  final String brand;
+  final List<String> images;
   final double rating;
   final int reviewCount;
   final int availableStock;
@@ -19,11 +21,15 @@ class Product {
     this.oldPrice,
     required this.image,
     required this.category,
+    this.brand = 'General',
+    this.images = const [],
     required this.rating,
     required this.reviewCount,
     required this.availableStock,
     this.isFeatured = false,
   });
+
+  List<String> get allImages => images.isNotEmpty ? images : [image];
 
   // Calculate discount percentage
   int get discountPercentage {

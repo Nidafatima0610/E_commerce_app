@@ -5,80 +5,84 @@ import '../providers/app_providers.dart';
 import '../widgets/product_card.dart';
 import 'search_screen.dart';
 
-class CategoriesScreen extends ConsumerStatefulWidget {
-  const CategoriesScreen({super.key});
-
-  @override
-  ConsumerState<CategoriesScreen> createState() => _CategoriesScreenState();
+enum ProductSortOption {
+  featured,
+  priceLowToHigh,
+  priceHighToLow,
+  rating,
 }
 
-class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
-  String _sortOption = 'default';
+class ProductListScreen extends ConsumerStatefulWidget {
+  final String title;
+  final String? initialCategory;
+  final bool onlyDeals;
+  final bool onlyFeatured;
 
-  IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'electronics':
-        return Icons.headphones_outlined;
-      case 'mobiles':
-        return Icons.smartphone_outlined;
-      case 'fashion':
-        return Icons.checkroom_outlined;
-      case 'shoes':
-        return Icons.snowshoeing_outlined;
-      case 'beauty':
-        return Icons.spa_outlined;
-      case 'home & kitchen':
-        return Icons.kitchen_outlined;
-      case 'accessories':
-        return Icons.shopping_bag_outlined;
-      case 'bags':
-        return Icons.backpack_outlined;
-      case 'watches':
-        return Icons.watch_outlined;
-      case 'gaming':
-        return Icons.sports_esports_outlined;
-      case 'sports':
-        return Icons.fitness_center_outlined;
-      default:
-        return Icons.dashboard_outlined;
-    }
+  const ProductListScreen({
+    super.key,
+    required this.title,
+    this.initialCategory,
+    this.onlyDeals = false,
+    this.onlyFeatured = false,
+  });
+
+  @override
+  ConsumerState<ProductListScreen> createState() => _ProductListScreenState();
+}
+
+class _ProductListScreenState extends ConsumerState<ProductListScreen> {
+  late String _selectedCategory;
+  ProductSortOption _sortOption = ProductSortOption.featured;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategory = widget.initialCategory ?? 'All';
   }
 
-  List<Product> _sortProducts(List<Product> products) {
-    final list = List<Product>.from(products);
+  List<Product> _getFilteredProducts(List<Product> allProducts) {
+    var list = allProducts;
+
+    if (widget.onlyDeals) {
+      list = list.where((p) => p.discountPercentage > 0).toList();
+    } else if (widget.onlyFeatured) {
+      list = list.where((p) => p.isFeatured).toList();
+    }
+
+    if (_selectedCategory != 'All') {
+      list = list.where((p) => p.category.toLowerCase() == _selectedCategory.toLowerCase()).toList();
+    }
+
+    // Sort
+    final sorted = List<Product>.from(list);
     switch (_sortOption) {
-      case 'price_low':
-        list.sort((a, b) => a.price.compareTo(b.price));
+      case ProductSortOption.priceLowToHigh:
+        sorted.sort((a, b) => a.price.compareTo(b.price));
         break;
-      case 'price_high':
-        list.sort((a, b) => b.price.compareTo(a.price));
+      case ProductSortOption.priceHighToLow:
+        sorted.sort((a, b) => b.price.compareTo(a.price));
         break;
-      case 'rating':
-        list.sort((a, b) => b.rating.compareTo(a.rating));
+      case ProductSortOption.rating:
+        sorted.sort((a, b) => b.rating.compareTo(a.rating));
         break;
-      case 'discount':
-        list.sort((a, b) => b.discountPercentage.compareTo(a.discountPercentage));
-        break;
-      default:
+      case ProductSortOption.featured:
+        sorted.sort((a, b) => (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0));
         break;
     }
-    return list;
+    return sorted;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final categories = ref.watch(categoriesProvider);
-    final selectedCategory = ref.watch(selectedCategoryProvider);
-    final rawProducts = ref.watch(filteredProductsProvider);
-    final products = _sortProducts(rawProducts);
-
-    final allCategories = ['All', ...categories];
+    final allProducts = ref.watch(productsProvider);
+    final categories = ['All', ...ref.watch(categoriesProvider)];
+    final products = _getFilteredProducts(allProducts);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Categories & Products'),
+        title: Text(widget.title),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -93,30 +97,28 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       ),
       body: Column(
         children: [
-          // Horizontal Category Selector with Icons
+          // Category selector chips
           Container(
-            height: 52,
+            height: 48,
             margin: const EdgeInsets.symmetric(vertical: 8),
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               scrollDirection: Axis.horizontal,
-              itemCount: allCategories.length,
+              itemCount: categories.length,
               separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-                final cat = allCategories[index];
-                final isSelected = (selectedCategory == null && cat == 'All') ||
-                    (selectedCategory?.toLowerCase() == cat.toLowerCase());
+                final category = categories[index];
+                final isSelected = _selectedCategory.toLowerCase() == category.toLowerCase();
 
-                return FilterChip(
-                  avatar: Icon(
-                    _getCategoryIcon(cat),
-                    size: 16,
-                    color: isSelected ? Colors.white : theme.colorScheme.primary,
-                  ),
-                  label: Text(cat),
+                return ChoiceChip(
+                  label: Text(category),
                   selected: isSelected,
                   onSelected: (selected) {
-                    ref.read(selectedCategoryProvider.notifier).update(cat == 'All' ? null : cat);
+                    if (selected) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                    }
                   },
                   selectedColor: theme.colorScheme.primary,
                   labelStyle: TextStyle(
@@ -131,37 +133,30 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                         : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                   ),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  showCheckmark: false,
                 );
               },
             ),
           ),
 
-          // Subheader: count and sort
+          // Filter bar & Count
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    selectedCategory == null || selectedCategory == 'All'
-                        ? 'All Products (${products.length})'
-                        : '$selectedCategory (${products.length})',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
+                Text(
+                  '${products.length} Products found',
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
-                PopupMenuButton<String>(
+                PopupMenuButton<ProductSortOption>(
                   initialValue: _sortOption,
-                  onSelected: (val) => setState(() => _sortOption = val),
+                  onSelected: (option) => setState(() => _sortOption = option),
                   child: Row(
                     children: [
-                      Icon(Icons.tune, size: 16, color: theme.colorScheme.primary),
+                      Icon(Icons.swap_vert, size: 18, color: theme.colorScheme.primary),
                       const SizedBox(width: 4),
                       Text(
-                        _getSortText(_sortOption),
+                        _sortLabel(_sortOption),
                         style: TextStyle(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w600,
@@ -170,12 +165,23 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                       ),
                     ],
                   ),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'default', child: Text('Default')),
-                    PopupMenuItem(value: 'price_low', child: Text('Price: Low to High')),
-                    PopupMenuItem(value: 'price_high', child: Text('Price: High to Low')),
-                    PopupMenuItem(value: 'rating', child: Text('Highest Rated')),
-                    PopupMenuItem(value: 'discount', child: Text('Biggest Discounts')),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: ProductSortOption.featured,
+                      child: Text('Featured'),
+                    ),
+                    const PopupMenuItem(
+                      value: ProductSortOption.priceLowToHigh,
+                      child: Text('Price: Low to High'),
+                    ),
+                    const PopupMenuItem(
+                      value: ProductSortOption.priceHighToLow,
+                      child: Text('Price: High to Low'),
+                    ),
+                    const PopupMenuItem(
+                      value: ProductSortOption.rating,
+                      child: Text('Highest Rated'),
+                    ),
                   ],
                 ),
               ],
@@ -183,7 +189,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           ),
           const Divider(height: 1),
 
-          // 2-Column Responsive Product Grid
+          // Product Grid or Empty State
           Expanded(
             child: products.isEmpty
                 ? Center(
@@ -192,22 +198,24 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.category_outlined, size: 70, color: Colors.grey[400]),
+                          Icon(Icons.inventory_2_outlined, size: 70, color: Colors.grey[400]),
                           const SizedBox(height: 16),
                           Text(
-                            'No products in this category',
+                            'No products found',
                             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
-                            'Please check back later or view all products.',
+                            'Try selecting a different category or filter',
                             style: theme.textTheme.bodyMedium,
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton(
                             onPressed: () {
-                              ref.read(selectedCategoryProvider.notifier).update(null);
+                              setState(() {
+                                _selectedCategory = 'All';
+                              });
                             },
                             child: const Text('Show All Products'),
                           ),
@@ -234,18 +242,16 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     );
   }
 
-  String _getSortText(String option) {
+  String _sortLabel(ProductSortOption option) {
     switch (option) {
-      case 'price_low':
+      case ProductSortOption.featured:
+        return 'Featured';
+      case ProductSortOption.priceLowToHigh:
         return 'Price: Low';
-      case 'price_high':
+      case ProductSortOption.priceHighToLow:
         return 'Price: High';
-      case 'rating':
+      case ProductSortOption.rating:
         return 'Top Rated';
-      case 'discount':
-        return 'Discounts';
-      default:
-        return 'Sort by';
     }
   }
 }
