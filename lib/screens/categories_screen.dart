@@ -587,25 +587,27 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                           Icon(Icons.category_outlined, size: 64, color: Colors.grey[400]),
                           const SizedBox(height: 16),
                           const Text(
-                            'No Products Found',
+                            'No products available in this category yet.',
+                            textAlign: TextAlign.center,
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             activeFilters > 0
                                 ? 'No products match your current filters in this category.'
-                                : 'Explore other categories or view all products.',
+                                : 'Check out our other departments and curated collections.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey[600], fontSize: 13),
                           ),
                           const SizedBox(height: 16),
-                          ElevatedButton(
+                          ElevatedButton.icon(
                             onPressed: () {
                               _resetFilters();
                               ref.read(selectedCategoryProvider.notifier).update(null);
                               ref.read(selectedSubcategoryProvider.notifier).update(null);
                             },
-                            child: const Text('View All Products'),
+                            icon: const Icon(Icons.explore_outlined, size: 16),
+                            label: const Text('Explore Other Categories'),
                           ),
                         ],
                       ),

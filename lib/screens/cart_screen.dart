@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../models/coupon.dart';
+import '../models/product.dart';
 import '../core/currency_format.dart';
 import '../widgets/product_image.dart';
 import 'checkout_screen.dart';
+import 'product_details_screen.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
@@ -49,7 +51,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       }
     } else {
       setState(() {
-        _couponError = 'Invalid promo code. Try "SAVE10", "PKR500", or "AZADI20"';
+        _couponError = 'Invalid promo code. Try "WELCOME10", "SAVE500", or "FREESHIP"';
       });
     }
   }
@@ -58,12 +60,17 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Widget build(BuildContext context) {
     final cartItems = ref.watch(cartProvider);
     final savedItems = ref.watch(savedForLaterProvider);
+    final accessories = ref.watch(cartAccessoriesProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final subtotal = ref.watch(cartProvider.notifier).subtotal;
     final coupon = ref.watch(appliedCouponProvider);
-    final discount = ref.read(cartProvider.notifier).calculateDiscount(coupon);
-    final shipping = (subtotal >= 2999 || subtotal == 0) ? 0.0 : 250.0;
+    const deliveryThreshold = 2999.0;
+    final deliveryProgress = (subtotal / deliveryThreshold).clamp(0.0, 1.0);
+    final remainingForFree = (deliveryThreshold - subtotal).clamp(0.0, deliveryThreshold);
+    final baseShipping = (subtotal >= deliveryThreshold || subtotal == 0) ? 0.0 : 150.0;
+    final discount = ref.read(cartProvider.notifier).calculateDiscount(coupon, deliveryFee: baseShipping);
+    final shipping = (coupon?.discountType == CouponDiscountType.freeShipping) ? 0.0 : baseShipping;
     final total = (subtotal - discount + shipping).clamp(0.0, double.infinity);
 
     return Scaffold(
@@ -155,41 +162,58 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Free Shipping Progress
+                  // Free Shipping Dynamic Progress Bar
                   if (cartItems.isNotEmpty)
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: subtotal >= 2999
-                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                            : const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        color: subtotal >= deliveryThreshold
+                            ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                            : const Color(0xFF2563EB).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: subtotal >= 2999
+                          color: subtotal >= deliveryThreshold
                               ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                              : const Color(0xFF3B82F6).withValues(alpha: 0.25),
+                              : const Color(0xFF2563EB).withValues(alpha: 0.2),
                         ),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            subtotal >= 2999 ? Icons.check_circle_rounded : Icons.local_shipping_outlined,
-                            size: 20,
-                            color: subtotal >= 2999 ? const Color(0xFF10B981) : const Color(0xFF2563EB),
+                          Row(
+                            children: [
+                              Icon(
+                                subtotal >= deliveryThreshold ? Icons.check_circle_rounded : Icons.local_shipping_outlined,
+                                size: 20,
+                                color: subtotal >= deliveryThreshold ? const Color(0xFF10B981) : const Color(0xFF2563EB),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  subtotal >= deliveryThreshold
+                                      ? 'Congratulations! You qualify for FREE Delivery across Pakistan 🎉'
+                                      : 'Add ${CurrencyFormat.format(remainingForFree)} more for FREE TCS Delivery',
+                                  style: TextStyle(
+                                    color: subtotal >= deliveryThreshold
+                                        ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
+                                        : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1E40AF)),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              subtotal >= 2999
-                                  ? 'Congratulations! You qualify for FREE Delivery across Pakistan 🎉'
-                                  : 'Add ${CurrencyFormat.format(2999 - subtotal)} more to enjoy FREE Delivery!',
-                              style: TextStyle(
-                                color: subtotal >= 2999
-                                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
-                                    : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1E40AF)),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: deliveryProgress,
+                              minHeight: 5,
+                              backgroundColor: (subtotal >= deliveryThreshold ? const Color(0xFF10B981) : const Color(0xFF2563EB)).withValues(alpha: 0.15),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                subtotal >= deliveryThreshold ? const Color(0xFF10B981) : const Color(0xFF2563EB),
                               ),
                             ),
                           ),
@@ -447,7 +471,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                       const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B981)),
                                       const SizedBox(width: 8),
                                       Text(
-                                        '${coupon.code} applied (-${coupon.isPercentage ? "${coupon.discount.toInt()}%" : CurrencyFormat.format(coupon.discount)})',
+                                        '${coupon.code} applied (-${CurrencyFormat.format(discount)})',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF047857),
@@ -475,7 +499,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                     controller: _couponController,
                                     textCapitalization: TextCapitalization.characters,
                                     decoration: InputDecoration(
-                                      hintText: 'Enter code (e.g. AZADI20, SAVE10)',
+                                      hintText: 'Enter code (e.g. WELCOME10, SAVE500)',
                                       hintStyle: TextStyle(
                                         fontSize: 12.5,
                                         color: isDark ? Colors.grey[500] : Colors.grey[400],
@@ -619,6 +643,51 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       },
                     ),
                     const SizedBox(height: 20),
+                  ],
+
+                  // ==================== YOU MAY ALSO LIKE (CART ACCESSORIES) ====================
+                  if (cartItems.isNotEmpty && accessories.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.add_shopping_cart_rounded, size: 16, color: theme.colorScheme.primary),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'You May Also Like',
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'Frequently paired with items in your cart',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 195,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: accessories.length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          return _buildAccessoryCard(context, accessories[index], theme, isDark);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
 
                   // ==================== PRICE SUMMARY ====================
@@ -782,6 +851,91 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAccessoryCard(BuildContext context, Product product, ThemeData theme, bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailsScreen(product: product),
+          ),
+        );
+      },
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: double.infinity,
+                height: 80,
+                child: ProductImage(
+                  imageUrl: product.image,
+                  category: product.category,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              product.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              CurrencyFormat.format(product.price),
+              style: TextStyle(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              height: 28,
+              child: OutlinedButton(
+                onPressed: () {
+                  ref.read(cartProvider.notifier).addItem(product);
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Added ${product.name} to cart'),
+                      duration: const Duration(milliseconds: 1400),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  side: BorderSide(color: theme.colorScheme.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                child: Text(
+                  '+ Add',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -9,6 +9,8 @@ import '../core/currency_format.dart';
 import 'search_screen.dart';
 import 'product_list_screen.dart';
 import 'product_details_screen.dart';
+import 'deals_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -131,10 +133,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const ProductListScreen(
-              title: 'Flash & Summer Deals',
-              onlyDeals: true,
-            ),
+            builder: (context) => const DealsScreen(),
           ),
         );
         break;
@@ -270,69 +269,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _showNotificationsSheet(BuildContext context) {
-    ref.read(notificationCountProvider.notifier).markAllAsRead();
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Notifications & Offers',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444).withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.percent_rounded, color: Color(0xFFEF4444)),
-                ),
-                title: const Text('Promo Code AZADI20 Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text('Get 20% off your order on carts above Rs. 10,000. Apply at checkout.'),
-              ),
-              const Divider(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.local_shipping_rounded, color: Color(0xFF10B981)),
-                ),
-                title: const Text('Free Shipping Available', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text('Enjoy free TCS courier shipping across Pakistan on orders above Rs. 2,999.'),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSectionHeader({
     required BuildContext context,
     required String title,
@@ -434,6 +370,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final deliveryCity = ref.watch(deliveryCityProvider);
     final unreadCount = ref.watch(notificationCountProvider);
     final orders = ref.watch(ordersProvider);
+    final personalizedSections = ref.watch(personalizedHomeSectionsProvider);
 
     // Extract products from previous orders for "Buy Again"
     final buyAgainProducts = <Product>[];
@@ -519,7 +456,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         label: Text(unreadCount.toString()),
                         child: const Icon(Icons.notifications_outlined, size: 24),
                       ),
-                      onPressed: () => _showNotificationsSheet(context),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     ),
 
                     const SizedBox(width: 4),
@@ -826,10 +770,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ProductListScreen(
-                        title: 'Flash Deals',
-                        onlyDeals: true,
-                      ),
+                      builder: (context) => const DealsScreen(initialTabIndex: 0),
                     ),
                   );
                 },
@@ -895,10 +836,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ProductListScreen(
-                        title: 'Deals of the Day',
-                        onlyDealsOfTheDay: true,
-                      ),
+                      builder: (context) => const DealsScreen(initialTabIndex: 1),
                     ),
                   );
                 },
@@ -929,6 +867,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 12),
               _buildHorizontalProductList(products: popularProducts),
               const SizedBox(height: 24),
+
+              // ==================== PERSONALIZED BEHAVIOR SECTIONS ====================
+              for (final pSection in personalizedSections) ...[
+                _buildSectionHeader(
+                  context: context,
+                  title: pSection.title,
+                  subtitle: pSection.subtitle,
+                  icon: Icons.auto_awesome_rounded,
+                  iconColor: const Color(0xFF8B5CF6),
+                  onSeeAll: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductListScreen(
+                          title: pSection.title,
+                          initialCategory: pSection.category,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildHorizontalProductList(products: pSection.products),
+                const SizedBox(height: 24),
+              ],
 
               // ==================== 10. QUICK BUY AGAIN (Conditional) ====================
               if (buyAgainProducts.isNotEmpty) ...[
@@ -1158,9 +1121,136 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _buildHorizontalProductList(products: recentlyViewed),
                 const SizedBox(height: 28),
               ],
+
+              // ==================== 13. TRUST & SERVICE HIGHLIGHTS ====================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTrustItem(
+                              icon: Icons.verified_outlined,
+                              title: '100% Genuine',
+                              subtitle: 'Original brand warranty',
+                              color: const Color(0xFF10B981),
+                              theme: theme,
+                              isDark: isDark,
+                            ),
+                          ),
+                          Container(height: 40, width: 1, color: isDark ? Colors.grey[800] : Colors.grey[200]),
+                          Expanded(
+                            child: _buildTrustItem(
+                              icon: Icons.payments_outlined,
+                              title: 'Cash on Delivery',
+                              subtitle: 'Pay at your doorstep',
+                              color: const Color(0xFF2563EB),
+                              theme: theme,
+                              isDark: isDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTrustItem(
+                              icon: Icons.assignment_return_outlined,
+                              title: '7-Day Returns',
+                              subtitle: 'Hassle-free exchanges',
+                              color: const Color(0xFFF59E0B),
+                              theme: theme,
+                              isDark: isDark,
+                            ),
+                          ),
+                          Container(height: 40, width: 1, color: isDark ? Colors.grey[800] : Colors.grey[200]),
+                          Expanded(
+                            child: _buildTrustItem(
+                              icon: Icons.local_shipping_outlined,
+                              title: 'TCS Express',
+                              subtitle: 'Nationwide safe shipping',
+                              color: const Color(0xFF8B5CF6),
+                              theme: theme,
+                              isDark: isDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTrustItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                ),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

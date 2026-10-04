@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/address.dart';
 import '../models/cart_item.dart';
+import '../models/delivery_method.dart';
+import '../models/payment_method.dart';
+import '../models/coupon.dart';
 import '../providers/app_providers.dart';
 import '../core/currency_format.dart';
-import '../widgets/custom_image.dart';
-import 'order_history_screen.dart';
+import '../widgets/product_image.dart';
+import 'add_edit_address_screen.dart';
+import 'saved_addresses_screen.dart';
+import 'order_success_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final List<CartItem>? directCheckoutItems;
@@ -17,131 +22,869 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  String _selectedPayment = 'Cash on Delivery';
+  final TextEditingController _couponController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  String? _couponError;
+  bool _isPlacingOrder = false;
 
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {
-      'id': 'Cash on Delivery',
-      'title': 'Cash on Delivery (COD)',
-      'subtitle': 'Pay cash upon arrival • Most popular across Pakistan',
-      'icon': Icons.payments_outlined,
-      'isPopular': true,
-    },
-    {
-      'id': 'JazzCash / EasyPaisa',
-      'title': 'JazzCash / EasyPaisa',
-      'subtitle': 'Mobile wallet transfer • Zero extra fee',
-      'icon': Icons.account_balance_wallet_rounded,
-      'isPopular': false,
-    },
-    {
-      'id': 'Debit / Credit Card',
-      'title': 'Debit / Credit Card',
-      'subtitle': 'Visa, Mastercard, PayPak accepted',
-      'icon': Icons.credit_card_rounded,
-      'isPopular': false,
-    },
-    {
-      'id': 'Bank Transfer (IBFT)',
-      'title': 'Bank Transfer (IBFT / Raast)',
-      'subtitle': 'Direct bank deposit confirmation',
-      'icon': Icons.account_balance_rounded,
-      'isPopular': false,
-    },
-  ];
+  Address? _selectedAddress;
+  late DeliveryMethod _selectedDeliveryMethod;
+  late PaymentMethodOption _selectedPaymentMethod;
 
-  void _showAddAddressDialog(BuildContext context) {
-    final user = ref.read(userProfileProvider);
-    final nameCtrl = TextEditingController(text: user.name);
-    final streetCtrl = TextEditingController();
-    final cityCtrl = TextEditingController(text: 'Islamabad');
-    final stateCtrl = TextEditingController(text: 'ICT');
-    final zipCtrl = TextEditingController(text: '44000');
+  @override
+  void initState() {
+    super.initState();
+    _selectedDeliveryMethod = ref.read(selectedDeliveryMethodProvider);
+    _selectedPaymentMethod = ref.read(selectedPaymentMethodProvider);
+  }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+  @override
+  void dispose() {
+    _couponController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  void _applyCoupon(double subtotal, double deliveryFee) {
+    final code = _couponController.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+
+    final foundCoupon = dummyCoupons.where((c) => c.code == code).firstOrNull;
+    if (foundCoupon != null) {
+      if (subtotal < foundCoupon.minOrderAmount) {
+        setState(() {
+          _couponError = 'Min. order value of ${CurrencyFormat.format(foundCoupon.minOrderAmount)} required';
+        });
+      } else {
+        ref.read(appliedCouponProvider.notifier).update(foundCoupon);
+        setState(() {
+          _couponError = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Coupon "$code" applied! Saved ${CurrencyFormat.format(foundCoupon.calculateSavings(subtotal, deliveryFee))}'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _couponError = 'Invalid code. Try "WELCOME10", "SAVE500", or "FREESHIP"';
+      });
+    }
+  }
+
+  Future<void> _chooseAddress(List<Address> addresses) async {
+    final chosen = await Navigator.push<Address>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SavedAddressesScreen(
+          isSelectionMode: true,
+          selectedAddressId: _selectedAddress?.id ?? addresses.where((a) => a.isDefault).firstOrNull?.id,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Add Shipping Address in Pakistan',
-                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Full Name'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: streetCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'House / Flat #, Street, Area / Sector',
-                  hintText: 'e.g. House 24-B, Street 10, Sector F-8/1',
+      ),
+    );
+
+    if (chosen != null) {
+      setState(() {
+        _selectedAddress = chosen;
+      });
+    }
+  }
+
+  Future<void> _addNewAddress() async {
+    final newAddress = await Navigator.push<Address>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AddEditAddressScreen(),
+      ),
+    );
+
+    if (newAddress != null) {
+      setState(() {
+        _selectedAddress = newAddress;
+      });
+    }
+  }
+
+  Future<void> _handlePlaceOrder({
+    required List<CartItem> items,
+    required Address address,
+    required double subtotal,
+    required double discount,
+    required double deliveryFee,
+    required double total,
+    required bool isDirect,
+  }) async {
+    // 1. Validation
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your checkout cart is empty. Add products to continue.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    for (final item in items) {
+      if (item.product.isOutOfStock) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${item.product.name}" is out of stock. Please remove it from your cart.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      if (item.quantity > item.product.availableStock) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${item.product.name}" only has ${item.product.availableStock} in stock. Please reduce quantity.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() => _isPlacingOrder = true);
+
+    // Short realistic order placement simulation (zero-cost local processing)
+    await Future.delayed(const Duration(milliseconds: 650));
+
+    final newOrder = ref.read(ordersProvider.notifier).createOrder(
+      items: items,
+      totalAmount: total,
+      subtotal: subtotal,
+      discount: discount,
+      deliveryFee: deliveryFee,
+      address: address,
+      deliveryMethod: '${_selectedDeliveryMethod.title} (${_selectedDeliveryMethod.estimatedDays})',
+      paymentMethod: _selectedPaymentMethod.title,
+      estimatedDelivery: _selectedDeliveryMethod.id == 'express' ? '1–2 business days' : '2–4 business days',
+      notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+    );
+
+    if (!isDirect) {
+      ref.read(cartProvider.notifier).clearCart();
+      ref.read(appliedCouponProvider.notifier).update(null);
+    }
+
+    if (!mounted) return;
+    setState(() => _isPlacingOrder = false);
+
+    // Navigate to Order Success Screen
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OrderSuccessScreen(order: newOrder),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final isDirect = widget.directCheckoutItems != null && widget.directCheckoutItems!.isNotEmpty;
+    final checkoutItems = isDirect ? widget.directCheckoutItems! : ref.watch(cartProvider);
+
+    final addresses = ref.watch(addressesProvider);
+    final effectiveAddress = _selectedAddress ??
+        addresses.where((a) => a.isDefault).firstOrNull ??
+        addresses.firstOrNull;
+
+    final subtotal = checkoutItems.fold(0.0, (sum, i) => sum + i.subtotal);
+    final coupon = isDirect ? null : ref.watch(appliedCouponProvider);
+
+    // Calculate delivery fee
+    double baseDeliveryFee = _selectedDeliveryMethod.fee;
+    if (subtotal >= 2999 && _selectedDeliveryMethod.id == 'standard') {
+      baseDeliveryFee = 0.0;
+    }
+    final discount = coupon != null ? coupon.calculateSavings(subtotal, baseDeliveryFee) : 0.0;
+    final finalDeliveryFee = (coupon?.discountType == CouponDiscountType.freeShipping) ? 0.0 : baseDeliveryFee;
+    final total = (subtotal - discount + finalDeliveryFee).clamp(0.0, double.infinity);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Checkout'),
+      ),
+      body: checkoutItems.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text('No items to checkout', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Return to Cart'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: cityCtrl,
-                      decoration: const InputDecoration(labelText: 'City (e.g. Lahore, Karachi)'),
+                  // ==================== 1. DELIVERY ADDRESS ====================
+                  _buildSectionHeader('1. Delivery Address', Icons.location_on_outlined, theme),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: effectiveAddress == null
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'No delivery address added yet',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Please enter your Pakistani street and house address to proceed with checkout.',
+                                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12.5),
+                              ),
+                              const SizedBox(height: 14),
+                              ElevatedButton.icon(
+                                onPressed: _addNewAddress,
+                                icon: const Icon(Icons.add_location_alt_outlined),
+                                label: const Text('Add Delivery Address'),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        effectiveAddress.name,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                      ),
+                                      if (effectiveAddress.isDefault) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Text(
+                                            'DEFAULT',
+                                            style: TextStyle(
+                                              color: Color(0xFF047857),
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => _chooseAddress(addresses),
+                                    icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                                    label: const Text('Change'),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                effectiveAddress.phone,
+                                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                effectiveAddress.formattedAddress,
+                                style: TextStyle(
+                                  color: isDark ? Colors.grey[300] : Colors.grey[800],
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ==================== 2. DELIVERY METHOD ====================
+                  _buildSectionHeader('2. Delivery Method', Icons.local_shipping_outlined, theme),
+                  const SizedBox(height: 8),
+                  Column(
+                    children: defaultDeliveryMethods.map((method) {
+                      final isSelected = _selectedDeliveryMethod.id == method.id;
+                      final isFree = (method.id == 'standard' && (subtotal >= 2999 || coupon?.discountType == CouponDiscountType.freeShipping));
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedDeliveryMethod = method;
+                            });
+                            ref.read(selectedDeliveryMethodProvider.notifier).selectMethod(method);
+                          },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14.0),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isSelected ? theme.colorScheme.primary : Colors.grey,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: isSelected
+                                      ? Center(
+                                          child: Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.primary,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              method.title,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            isFree ? 'FREE' : CurrencyFormat.format(method.fee),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13.5,
+                                              color: isFree ? const Color(0xFF10B981) : theme.colorScheme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        'Estimated: ${method.estimatedDays} • ${method.description}',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ==================== 3. PAYMENT METHOD ====================
+                  _buildSectionHeader('3. Payment Method', Icons.payment_outlined, theme),
+                  const SizedBox(height: 8),
+                  Column(
+                    children: availablePaymentOptions.map((option) {
+                      final isSelected = _selectedPaymentMethod.id == option.id;
+                      final isAvailable = option.isAvailable;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: isAvailable ? theme.colorScheme.surface : (isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF8FAFC)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: isAvailable
+                              ? () {
+                                  setState(() => _selectedPaymentMethod = option);
+                                  ref.read(selectedPaymentMethodProvider.notifier).selectMethod(option);
+                                }
+                              : () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: Text(option.title),
+                                      content: const Text(
+                                        'Digital card and mobile wallet gateways are planned for future backend integration.\n\nFor now, Cash on Delivery is 100% active with nationwide zero-fee coverage.',
+                                      ),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+                                      ],
+                                    ),
+                                  );
+                                },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14.0),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  option.type == PaymentType.cashOnDelivery
+                                      ? Icons.payments_outlined
+                                      : (option.type == PaymentType.card
+                                          ? Icons.credit_card_rounded
+                                          : (option.type == PaymentType.mobileWallet
+                                              ? Icons.account_balance_wallet_outlined
+                                              : Icons.account_balance_rounded)),
+                                  color: isSelected
+                                      ? theme.colorScheme.primary
+                                      : (isAvailable ? Colors.grey.shade600 : Colors.grey.shade400),
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              option.title,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                color: isAvailable ? null : Colors.grey,
+                                              ),
+                                            ),
+                                          ),
+                                          if (option.badgeText != null) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: (option.isAvailable ? const Color(0xFF10B981) : const Color(0xFF64748B)).withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                option.badgeText!,
+                                                style: TextStyle(
+                                                  color: option.isAvailable ? const Color(0xFF047857) : const Color(0xFF475569),
+                                                  fontSize: 9.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        option.subtitle,
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isAvailable)
+                                  Container(
+                                    width: 20,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected ? theme.colorScheme.primary : Colors.grey,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: isSelected
+                                        ? Center(
+                                            child: Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                color: theme.colorScheme.primary,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ==================== 4. ORDER ITEMS ====================
+                  _buildSectionHeader('4. Order Items (${checkoutItems.length})', Icons.inventory_2_outlined, theme),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: checkoutItems.length,
+                      separatorBuilder: (context, index) => const Divider(height: 16),
+                      itemBuilder: (context, index) {
+                        final item = checkoutItems[index];
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: ProductImage(
+                                  imageUrl: item.product.image,
+                                  category: item.product.category,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.product.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                  if (item.variantDescription.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.variantDescription,
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${item.quantity} × ${CurrencyFormat.format(item.unitPrice)}',
+                                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              CurrencyFormat.format(item.subtotal),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: stateCtrl,
-                      decoration: const InputDecoration(labelText: 'Province / Territory'),
+                  const SizedBox(height: 24),
+
+                  // ==================== 5. PROMO / COUPON FOUNDATION ====================
+                  _buildSectionHeader('5. Promo Voucher & Delivery Notes', Icons.local_offer_outlined, theme),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (coupon != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B981)),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Coupon ${coupon.code} active (-${CurrencyFormat.format(discount)})',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF047857), fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () {
+                                    ref.read(appliedCouponProvider.notifier).update(null);
+                                    _couponController.clear();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _couponController,
+                                  textCapitalization: TextCapitalization.characters,
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. WELCOME10, SAVE500',
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              ElevatedButton(
+                                onPressed: () => _applyCoupon(subtotal, baseDeliveryFee),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: const Text('Apply'),
+                              ),
+                            ],
+                          ),
+                          if (_couponError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Text(_couponError!, style: const TextStyle(color: Colors.red, fontSize: 11.5)),
+                            ),
+                        ],
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: _notesController,
+                          decoration: InputDecoration(
+                            hintText: 'Delivery instructions (e.g. Ring bell twice, leave with guard)',
+                            hintStyle: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ==================== 6. PRICE SUMMARY ====================
+                  _buildSectionHeader('6. Price Summary', Icons.receipt_long_outlined, theme),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildPriceRow('Items Subtotal', CurrencyFormat.format(subtotal), theme),
+                        if (discount > 0)
+                          _buildPriceRow(
+                            'Coupon Savings (${coupon?.code ?? ""})',
+                            '-${CurrencyFormat.format(discount)}',
+                            theme,
+                            color: const Color(0xFF10B981),
+                          ),
+                        _buildPriceRow(
+                          'Delivery Fee (${_selectedDeliveryMethod.title})',
+                          finalDeliveryFee == 0 ? 'FREE' : CurrencyFormat.format(finalDeliveryFee),
+                          theme,
+                          color: finalDeliveryFee == 0 ? const Color(0xFF10B981) : null,
+                        ),
+                        const Divider(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Total Payable',
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              CurrencyFormat.format(total),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+
+      // ==================== BOTTOM STICKY PLACE ORDER CTA ====================
+      bottomSheet: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, -4),
+            ),
+          ],
+          border: Border(
+            top: BorderSide(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total (${checkoutItems.length} items)',
+                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11.5),
+                  ),
+                  Text(
+                    CurrencyFormat.format(total),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: zipCtrl,
-                decoration: const InputDecoration(labelText: 'Postal Code'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (streetCtrl.text.trim().isEmpty || cityCtrl.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please fill all address fields')),
-                      );
-                      return;
-                    }
-                    final newAddr = Address(
-                      id: 'addr_${DateTime.now().millisecondsSinceEpoch}',
-                      name: nameCtrl.text.trim(),
-                      street: streetCtrl.text.trim(),
-                      city: cityCtrl.text.trim(),
-                      state: stateCtrl.text.trim(),
-                      zipCode: zipCtrl.text.trim(),
-                      country: 'Pakistan',
-                      isDefault: true,
-                    );
-                    ref.read(addressesProvider.notifier).addAddress(newAddr);
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Save Delivery Address'),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isPlacingOrder
+                      ? null
+                      : () {
+                          if (effectiveAddress == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please add or select a delivery address in Pakistan to complete order.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            _addNewAddress();
+                            return;
+                          }
+
+                          _handlePlaceOrder(
+                            items: checkoutItems,
+                            address: effectiveAddress,
+                            subtotal: subtotal,
+                            discount: discount,
+                            deliveryFee: finalDeliveryFee,
+                            total: total,
+                            isDirect: isDirect,
+                          );
+                        },
+                  icon: _isPlacingOrder
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle_outline, size: 18),
+                  label: Text(_isPlacingOrder ? 'Processing...' : 'Place Order (COD)'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
             ],
@@ -151,496 +894,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isDirect = widget.directCheckoutItems != null && widget.directCheckoutItems!.isNotEmpty;
-    final checkoutItems = isDirect ? widget.directCheckoutItems! : ref.watch(cartProvider);
-    final subtotal = isDirect
-        ? checkoutItems.fold(0.0, (sum, i) => sum + i.subtotal)
-        : ref.watch(cartProvider.notifier).subtotal;
-    final coupon = isDirect ? null : ref.watch(appliedCouponProvider);
-    final discount = isDirect ? 0.0 : ref.watch(cartProvider.notifier).calculateDiscount(coupon);
-    final shipping = (subtotal >= 2999 || subtotal == 0) ? 0.0 : 250.0;
-    final total = (subtotal - discount + shipping).clamp(0.0, double.infinity);
-
-    final addresses = ref.watch(addressesProvider);
-    final defaultAddress = addresses.where((a) => a.isDefault).firstOrNull ?? addresses.firstOrNull;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ==================== 1. DELIVERY ADDRESS ====================
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.location_on_outlined, color: theme.colorScheme.primary, size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Delivery Address',
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                TextButton(
-                  onPressed: () => _showAddAddressDialog(context),
-                  child: Text(defaultAddress == null ? 'Add Address' : 'Change'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                ),
-              ),
-              child: defaultAddress == null
-                  ? const Text('No delivery address provided. Tap "Add Address" to enter your details.')
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              defaultAddress.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                'DELIVERY LOCATION',
-                                style: TextStyle(
-                                  color: theme.colorScheme.primary,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          defaultAddress.street,
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[300] : Colors.grey[700],
-                            fontSize: 13.5,
-                          ),
-                        ),
-                        Text(
-                          '${defaultAddress.city}, ${defaultAddress.state} ${defaultAddress.zipCode}, ${defaultAddress.country}',
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-            const SizedBox(height: 24),
-
-            // ==================== 2. ORDER ITEMS ====================
-            Row(
-              children: [
-                Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'Order Items (${checkoutItems.length})',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 105,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: checkoutItems.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final item = checkoutItems[index];
-                  return Container(
-                    width: 250,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: SizedBox(
-                            width: 60,
-                            height: 60,
-                            child: CustomNetworkImage(imageUrl: item.product.image),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                item.product.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              if (item.variantDescription.isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  item.variantDescription,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.primary,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 2),
-                              Text(
-                                '${item.quantity}x • ${CurrencyFormat.format(item.unitPrice)}',
-                                style: TextStyle(
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                CurrencyFormat.format(item.subtotal),
-                                style: TextStyle(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ==================== 3. PAYMENT METHOD ====================
-            Row(
-              children: [
-                Icon(Icons.payment_outlined, color: theme.colorScheme.primary, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'Payment Method',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Column(
-              children: _paymentMethods.map((method) {
-                final isSelected = _selectedPayment == method['id'];
-                final isPopular = method['isPopular'] as bool? ?? false;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected
-                          ? theme.colorScheme.primary
-                          : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: InkWell(
-                    onTap: () => setState(() => _selectedPayment = method['id'] as String),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14.0),
-                      child: Row(
-                        children: [
-                          Icon(
-                            method['icon'] as IconData,
-                            color: isSelected ? theme.colorScheme.primary : Colors.grey,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      method['title'] as String,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    if (isPopular) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: const Text(
-                                          'POPULAR',
-                                          style: TextStyle(
-                                            color: Color(0xFF047857),
-                                            fontSize: 9.5,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  method['subtitle'] as String,
-                                  style: TextStyle(
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isSelected ? theme.colorScheme.primary : Colors.grey,
-                                width: 2,
-                              ),
-                            ),
-                            child: isSelected
-                                ? Center(
-                                    child: Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-
-            // ==================== 4. PRICE SUMMARY ====================
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Price Details',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
-                  _buildSummaryRow('Subtotal', CurrencyFormat.format(subtotal), theme),
-                  if (discount > 0)
-                    _buildSummaryRow(
-                      'Coupon Discount',
-                      '-${CurrencyFormat.format(discount)}',
-                      theme,
-                      color: const Color(0xFF10B981),
-                    ),
-                  _buildSummaryRow(
-                    'Delivery Fee',
-                    shipping == 0 ? 'FREE' : CurrencyFormat.format(shipping),
-                    theme,
-                    color: shipping == 0 ? const Color(0xFF10B981) : null,
-                  ),
-                  const Divider(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total Payable',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        CurrencyFormat.format(total),
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // ==================== 5. PLACE ORDER BUTTON ====================
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  if (defaultAddress == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please add a delivery address to complete your order'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    return;
-                  }
-
-                  if (checkoutItems.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No items to checkout'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    return;
-                  }
-
-                  final newOrderId = 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-                  ref.read(ordersProvider.notifier).addOrder(
-                    checkoutItems,
-                    total,
-                    address: defaultAddress,
-                    paymentMethod: _selectedPayment,
-                  );
-                  if (!isDirect) {
-                    ref.read(cartProvider.notifier).clearCart();
-                    ref.read(appliedCouponProvider.notifier).update(null);
-                  }
-
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (ctx) => AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.check_circle_rounded,
-                              color: Color(0xFF10B981),
-                              size: 64,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Order Placed Successfully!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Order ID: $newOrderId\nTotal: ${CurrencyFormat.format(total)}\nPayment: $_selectedPayment\nEst. Delivery: 2-4 business days via TCS Courier',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
-                              fontSize: 13,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                Navigator.pop(context);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const OrderHistoryScreen()),
-                                );
-                              },
-                              child: const Text('View Order Details'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () {
-                              ref.read(bottomNavIndexProvider.notifier).setIndex(0);
-                              Navigator.pop(ctx);
-                              Navigator.pop(context);
-                            },
-                            child: const Text('Continue Shopping'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.lock_outline, size: 18),
-                label: Text('Place Order • ${CurrencyFormat.format(total)}'),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
+  Widget _buildSectionHeader(String title, IconData icon, ThemeData theme) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, ThemeData theme, {Color? color}) {
+  Widget _buildPriceRow(String label, String value, ThemeData theme, {Color? color}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: theme.textTheme.bodyMedium),
+          Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+          const SizedBox(width: 8),
           Text(
             value,
             style: theme.textTheme.bodyMedium?.copyWith(

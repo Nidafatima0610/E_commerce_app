@@ -7,13 +7,15 @@ class UserProfileData {
   final String email;
   final String phone;
   final String selectedCity;
+  final String avatarUrl;
 
   const UserProfileData({
     required this.id,
     required this.name,
     required this.email,
     required this.phone,
-    this.selectedCity = 'Lahore',
+    this.selectedCity = 'Bahawalpur',
+    this.avatarUrl = '',
   });
 
   UserProfileData copyWith({
@@ -22,6 +24,7 @@ class UserProfileData {
     String? email,
     String? phone,
     String? selectedCity,
+    String? avatarUrl,
   }) {
     return UserProfileData(
       id: id ?? this.id,
@@ -29,6 +32,27 @@ class UserProfileData {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       selectedCity: selectedCity ?? this.selectedCity,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'name': name,
+    'email': email,
+    'phone': phone,
+    'selectedCity': selectedCity,
+    'avatarUrl': avatarUrl,
+  };
+
+  factory UserProfileData.fromMap(Map<String, dynamic> map) {
+    return UserProfileData(
+      id: map['id'] ?? 'usr_101',
+      name: map['name'] ?? 'Umair',
+      email: map['email'] ?? 'umair@example.com',
+      phone: map['phone'] ?? '+92 301 7894561',
+      selectedCity: map['selectedCity'] ?? 'Bahawalpur',
+      avatarUrl: map['avatarUrl'] ?? '',
     );
   }
 }
@@ -51,8 +75,9 @@ class LocalUserRepository implements UserRepository {
       id: _storage.getString('user_id') ?? 'usr_101',
       name: _storage.getString('user_name') ?? 'Umair',
       email: _storage.getString('user_email') ?? 'umair@example.com',
-      phone: _storage.getString('user_phone') ?? '+92 300 1234567',
-      selectedCity: _storage.getString('user_city') ?? 'Lahore',
+      phone: _storage.getString('user_phone') ?? '+92 301 7894561',
+      selectedCity: _storage.getString('user_city') ?? 'Bahawalpur',
+      avatarUrl: _storage.getString('user_avatar') ?? '',
     );
   }
 
@@ -63,30 +88,35 @@ class LocalUserRepository implements UserRepository {
     _storage.saveString('user_email', profile.email);
     _storage.saveString('user_phone', profile.phone);
     _storage.saveString('user_city', profile.selectedCity);
+    _storage.saveString('user_avatar', profile.avatarUrl);
   }
 
   @override
   List<Address> getAddresses() {
-    final data = _storage.getJson('addresses');
+    final data = _storage.getJson('addresses_v2');
     if (data != null && data is List && data.isNotEmpty) {
-      return data.map((e) => Address.fromJson(Map<String, dynamic>.from(e))).toList();
+      try {
+        return data.map((e) => Address.fromMap(Map<String, dynamic>.from(e))).toList();
+      } catch (_) {}
     }
-    return const [
-      Address(
-        id: 'addr_default',
-        name: 'Umair',
-        street: 'House 14-B, Street 5, Sector F-7/2',
-        city: 'Islamabad',
-        state: 'ICT',
-        zipCode: '44000',
-        country: 'Pakistan',
-        isDefault: true,
-      ),
-    ];
+
+    // Check legacy key
+    final legacyData = _storage.getJson('addresses');
+    if (legacyData != null && legacyData is List && legacyData.isNotEmpty) {
+      try {
+        final legacyAddresses = legacyData.map((e) => Address.fromMap(Map<String, dynamic>.from(e))).toList();
+        saveAddresses(legacyAddresses);
+        return legacyAddresses;
+      } catch (_) {}
+    }
+
+    // Default authentic Pakistani addresses
+    saveAddresses(defaultPakistaniAddresses);
+    return defaultPakistaniAddresses;
   }
 
   @override
   void saveAddresses(List<Address> addresses) {
-    _storage.saveJson('addresses', addresses.map((a) => a.toJson()).toList());
+    _storage.saveJson('addresses_v2', addresses.map((a) => a.toMap()).toList());
   }
 }

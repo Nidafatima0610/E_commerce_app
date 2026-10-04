@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
@@ -8,6 +9,8 @@ import '../widgets/product_image.dart';
 import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
 import 'product_compare_screen.dart';
+import 'reviews_screen.dart';
+import 'product_list_screen.dart';
 
 class ProductDetailsScreen extends ConsumerStatefulWidget {
   final Product product;
@@ -196,6 +199,8 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
   }
 
   void _showShareSheet(BuildContext context) {
+    final shareText = '${widget.product.name} - ${CurrencyFormat.format(widget.product.price)}\n${widget.product.description}\nProduct Link: https://ecommerce.pk/product/${widget.product.id}';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -222,13 +227,15 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), shape: BoxShape.circle),
                   child: const Icon(Icons.copy_rounded, color: Color(0xFF10B981)),
                 ),
-                title: const Text('Copy Product Link', style: TextStyle(fontWeight: FontWeight.w600)),
+                title: const Text('Copy Product Link & Details', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text('https://ecommerce.pk/product/${widget.product.id}'),
-                onTap: () {
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: shareText));
+                  if (!context.mounted) return;
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Product link for "${widget.product.name}" copied to clipboard!'),
+                      content: Text('Details for "${widget.product.name}" copied to clipboard!'),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -240,13 +247,15 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   decoration: BoxDecoration(color: const Color(0xFF25D366).withValues(alpha: 0.15), shape: BoxShape.circle),
                   child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366)),
                 ),
-                title: const Text('Share to WhatsApp', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Send to friends and family in Pakistan'),
-                onTap: () {
+                title: const Text('Share to WhatsApp / Messaging', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Copy formatted recommendation to paste into WhatsApp'),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: shareText));
+                  if (!context.mounted) return;
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Opening WhatsApp to share product...'),
+                      content: Text('Share text copied! Ready to paste in WhatsApp or messaging app.'),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -384,6 +393,134 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
     );
   }
 
+  void _openStoreDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.storefront_rounded, color: Color(0xFF3B82F6)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.product.sellerName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Verified Merchant on Pakistan E-Commerce Platform',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '• Merchant Rating: ★ ${widget.product.sellerRating} / 5.0 (99% Positive)\n'
+              '• Fast Dispatch: Ships within 24 hours via TCS & Leopards\n'
+              '• Returns: 7-Day Doorstep Replacement Guarantee\n'
+              '• Authentic: 100% genuine brand stock verified by platform',
+              style: const TextStyle(fontSize: 12.5, height: 1.5, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProductListScreen(
+                    title: widget.product.sellerName,
+                    initialCategory: widget.product.category,
+                  ),
+                ),
+              );
+            },
+            child: const Text('View Store Products'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAskQuestionDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.help_outline_rounded, color: Color(0xFF6366F1)),
+            SizedBox(width: 8),
+            Text('Ask a Question'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Have a question about "${widget.product.name}"? The verified seller will respond to your inquiry.',
+              style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'e.g. Is PTA duty paid? What is the warranty claim procedure?',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                final userProfile = ref.read(userProfileProvider);
+                ref.read(questionsProvider.notifier).askQuestion(
+                  productId: widget.product.id,
+                  question: text,
+                  askedBy: userProfile.name.isNotEmpty ? userProfile.name : 'Customer',
+                );
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Your question has been submitted to the merchant!'),
+                    backgroundColor: Color(0xFF10B981),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text('Submit Question'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -401,6 +538,10 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
 
     // Related products using smart repository algorithm
     final relatedProducts = ref.watch(productRepositoryProvider).getRelatedProducts(widget.product, limit: 6);
+    final productReviews = ref.watch(productReviewsProvider(widget.product.id));
+    final breakdown = ref.watch(ratingBreakdownProvider(widget.product));
+    final productQuestions = ref.watch(productQuestionsProvider(widget.product.id));
+    final isPurchased = ref.watch(isProductPurchasedByUserProvider(widget.product.id));
 
     final images = widget.product.allImages;
 
@@ -624,41 +765,52 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Rating + Reviews
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 10,
-                    runSpacing: 4,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
+                  // Rating + Reviews (Tappable to ReviewsScreen)
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ReviewsScreen(product: widget.product),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star_rounded, size: 18, color: Color(0xFFF59E0B)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${widget.product.rating}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Color(0xFFB45309),
+                      );
+                    },
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 10,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded, size: 18, color: Color(0xFFF59E0B)),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${breakdown.averageRating}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFFB45309),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${widget.product.reviewCount} verified ratings across Pakistan',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        Text(
+                          '${breakdown.totalCount > 0 ? breakdown.totalCount : widget.product.reviewCount} verified reviews across Pakistan • View All ›',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
 
@@ -933,48 +1085,28 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // ==================== 9. DELIVERY & SELLER ====================
+                  // ==================== 9. TRUST BADGES & GUARANTEES ====================
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                       ),
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.local_shipping_outlined, size: 20, color: Color(0xFF10B981)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                widget.product.deliveryInfo,
-                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 20),
-                        Row(
-                          children: [
-                            const Icon(Icons.storefront_outlined, size: 20, color: Color(0xFF3B82F6)),
+                            const Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 20),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    widget.product.sellerName,
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(
-                                    '★ ${widget.product.sellerRating} Merchant Rating • 99% Positive Feedback',
-                                    style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                  ),
+                                  const Text('100% Authentic & Original Guarantee', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text('Directly sourced from verified Pakistani distributors', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11)),
                                 ],
                               ),
                             ),
@@ -983,12 +1115,47 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                         const Divider(height: 20),
                         Row(
                           children: [
-                            const Icon(Icons.verified_user_outlined, size: 20, color: Color(0xFFF59E0B)),
+                            const Icon(Icons.replay_rounded, color: Color(0xFF3B82F6), size: 20),
                             const SizedBox(width: 10),
-                            const Expanded(
-                              child: Text(
-                                '100% Genuine Guarantee • 7 Days Hassle-Free Returns',
-                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('7 Days Hassle-Free Return & Exchange', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text('Doorstep return pickup available across Pakistan', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                        Row(
+                          children: [
+                            const Icon(Icons.local_shipping_rounded, color: Color(0xFFF59E0B), size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(widget.product.deliveryInfo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text('Cash on Delivery available nationwide via TCS', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                        Row(
+                          children: [
+                            const Icon(Icons.security_rounded, color: Color(0xFF8B5CF6), size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('1 Year Official Brand Warranty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text('Valid at authorized repair centers across Pakistan', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11)),
+                                ],
                               ),
                             ),
                           ],
@@ -996,7 +1163,346 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
+
+                  // ==================== 10. SELLER & STORE CARD ====================
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 22,
+                              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                              child: Icon(Icons.storefront_rounded, color: theme.colorScheme.primary, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          widget.product.sellerName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'VERIFIED',
+                                          style: TextStyle(color: Color(0xFF047857), fontSize: 9.5, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '★ ${widget.product.sellerRating} Merchant Rating • 99% Positive Response',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _openStoreDialog(context),
+                                icon: const Icon(Icons.info_outline_rounded, size: 16),
+                                label: const Text('Store Info', style: TextStyle(fontSize: 12)),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProductListScreen(
+                                        title: widget.product.sellerName,
+                                        initialCategory: widget.product.category,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                                label: const Text('View Products', style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ==================== 11. CUSTOMER REVIEWS & RATINGS PREVIEW ====================
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Customer Reviews',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ReviewsScreen(product: widget.product),
+                            ),
+                          );
+                        },
+                        child: const Text('View All'),
+                      ),
+                    ],
+                  ),
+                  if (isPurchased) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.verified_rounded, color: Color(0xFF10B981), size: 16),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'You purchased this product! Your reviews will receive a Verified Purchase badge.',
+                              style: TextStyle(color: Color(0xFF047857), fontSize: 11.5, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+
+                  if (productReviews.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.rate_review_outlined, size: 36, color: Colors.grey),
+                          const SizedBox(height: 8),
+                          const Text('No reviews yet for this product', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Text('Be the first customer in Pakistan to leave a review!', style: TextStyle(color: Colors.grey[600], fontSize: 11.5)),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    for (final rev in productReviews.take(2)) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                  child: Text(rev.userName[0], style: TextStyle(fontSize: 12, color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(rev.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                                          ),
+                                          if (rev.verifiedPurchase) ...[
+                                            const SizedBox(width: 4),
+                                            const Icon(Icons.verified, size: 12, color: Color(0xFF10B981)),
+                                          ],
+                                        ],
+                                      ),
+                                      Text(
+                                        rev.userCity,
+                                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 10.5),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
+                                    Text('${rev.rating.toInt()}★', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              rev.comment,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[300] : Colors.grey[800]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: 20),
+
+                  // ==================== 12. PRODUCT QUESTIONS & ANSWERS (Q&A) ====================
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Questions & Answers (${productQuestions.length})',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _openAskQuestionDialog(context),
+                        icon: const Icon(Icons.add_circle_outline, size: 16),
+                        label: const Text('Ask Question'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (productQuestions.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: const Text('No questions asked yet. Tap "Ask Question" to inquiry directly with the merchant.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    )
+                  else ...[
+                    for (final q in productQuestions.take(3)) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Q: ', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3B82F6), fontSize: 13)),
+                                Expanded(
+                                  child: Text(
+                                    q.question,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (q.isAnswered) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('A: ', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF10B981), fontSize: 13)),
+                                  Expanded(
+                                    child: Text(
+                                      q.answer!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? Colors.grey[300] : Colors.grey[750],
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Answered by ${q.answeredBy}',
+                                style: const TextStyle(fontSize: 10.5, color: Colors.grey, fontStyle: FontStyle.italic),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: 24),
 
                   // ==================== 10. RELATED PRODUCTS ====================
                   if (relatedProducts.isNotEmpty) ...[
@@ -1065,7 +1571,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                 child: OutlinedButton.icon(
                   onPressed: widget.product.isOutOfStock ? null : _handleAddToCart,
                   icon: const Icon(Icons.add_shopping_cart, size: 18),
-                  label: const Text('Add to Cart'),
+                  label: Text(widget.product.isOutOfStock ? 'Out of Stock' : 'Add to Cart'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1077,7 +1583,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: widget.product.isOutOfStock ? null : _handleBuyNow,
                   icon: const Icon(Icons.flash_on, size: 18),
-                  label: const Text('Buy Now'),
+                  label: Text(widget.product.isOutOfStock ? 'Unavailable' : 'Buy Now'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

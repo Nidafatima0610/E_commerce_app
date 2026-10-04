@@ -6,8 +6,8 @@ import '../models/address.dart';
 import '../models/product.dart';
 
 abstract class OrderRepository {
-  Future<List<Order>> getOrders(List<Product> catalog);
-  Future<void> saveOrders(List<Order> orders);
+  List<Order> getOrders(List<Product> catalog);
+  void saveOrders(List<Order> orders);
 }
 
 class LocalOrderRepository implements OrderRepository {
@@ -16,78 +16,110 @@ class LocalOrderRepository implements OrderRepository {
   LocalOrderRepository(this._prefs);
 
   @override
-  Future<List<Order>> getOrders(List<Product> catalog) async {
-    final String? orderData = _prefs.getString('orders_v2');
+  List<Order> getOrders(List<Product> catalog) {
+    final String? orderData = _prefs.getString('orders_v3');
     if (orderData != null) {
       try {
         final List<dynamic> decoded = jsonDecode(orderData);
-        return decoded.map((o) {
-          final itemsList = (o['items'] as List).map((i) {
-            final p = catalog.firstWhere((prod) => prod.id == i['productId'], orElse: () => catalog.first);
-            return CartItem(
-              id: i['id'] ?? '',
-              product: p,
-              quantity: (i['quantity'] as num?)?.toInt() ?? 1,
-            );
-          }).toList();
-
-          return Order(
-            id: o['id'],
-            items: itemsList,
-            totalAmount: (o['totalAmount'] as num).toDouble(),
-            date: DateTime.parse(o['date']),
-            status: o['status'] ?? 'Confirmed',
-            paymentMethod: o['paymentMethod'] ?? 'Cash on Delivery',
-            deliveryAddress: o['address'] != null ? Address.fromJson(Map<String, dynamic>.from(o['address'])) : null,
-          );
-        }).toList();
+        final List<Order> loaded = [];
+        for (final o in decoded) {
+          if (o is Map<String, dynamic>) {
+            loaded.add(Order.fromMap(o, catalog));
+          }
+        }
+        if (loaded.isNotEmpty) return loaded;
       } catch (_) {}
     }
 
-    // Default mock orders if none saved
+    // Check legacy v2 format
+    final String? legacyData = _prefs.getString('orders_v2');
+    if (legacyData != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(legacyData);
+        final List<Order> loaded = [];
+        for (final o in decoded) {
+          if (o is Map<String, dynamic>) {
+            loaded.add(Order.fromMap(o, catalog));
+          }
+        }
+        if (loaded.isNotEmpty) {
+          saveOrders(loaded);
+          return loaded;
+        }
+      } catch (_) {}
+    }
+
+    // Default authentic demo orders for Pakistani users if none exist
     if (catalog.isNotEmpty) {
-      return [
+      final defaultAddr = defaultPakistaniAddresses.first;
+      final p1 = catalog[0];
+      final p2 = catalog.length > 5 ? catalog[5] : catalog.first;
+      final p3 = catalog.length > 10 ? catalog[10] : catalog.first;
+
+      final initialOrders = [
         Order(
-          id: 'ORD-98241',
+          id: 'ORD-20261002-001',
           items: [
-            CartItem(id: 'c1', product: catalog[0], quantity: 1),
-            if (catalog.length > 5) CartItem(id: 'c2', product: catalog[5], quantity: 1),
+            CartItem(
+              id: 'c_demo_1',
+              product: p1,
+              quantity: 1,
+              unitPrice: p1.price,
+              selectedColor: p1.colors.isNotEmpty ? p1.colors.first : null,
+            ),
+            if (p2.id != p1.id)
+              CartItem(
+                id: 'c_demo_2',
+                product: p2,
+                quantity: 1,
+                unitPrice: p2.price,
+                selectedSize: p2.sizes.isNotEmpty ? p2.sizes.first : null,
+              ),
           ],
-          totalAmount: catalog[0].price + (catalog.length > 5 ? catalog[5].price : 0),
+          subtotal: p1.price + (p2.id != p1.id ? p2.price : 0),
+          discount: 500.0,
+          deliveryFee: 150.0,
+          totalAmount: p1.price + (p2.id != p1.id ? p2.price : 0) - 500.0 + 150.0,
           date: DateTime.now().subtract(const Duration(days: 2)),
           status: 'Delivered',
+          deliveryAddress: defaultAddr,
+          deliveryMethod: 'Standard Delivery (2–4 days)',
           paymentMethod: 'Cash on Delivery',
-          deliveryAddress: const Address(
-            id: 'addr_default',
-            name: 'Umair',
-            street: 'House 14-B, Street 5, Sector F-7/2',
-            city: 'Islamabad',
-            state: 'ICT',
-            zipCode: '44000',
-            country: 'Pakistan',
-            isDefault: true,
-          ),
+          paymentStatus: 'Paid (Cash on Delivery Handover)',
+          estimatedDelivery: 'Oct 04, 2026',
+        ),
+        Order(
+          id: 'ORD-20261004-002',
+          items: [
+            CartItem(
+              id: 'c_demo_3',
+              product: p3,
+              quantity: 1,
+              unitPrice: p3.price,
+            ),
+          ],
+          subtotal: p3.price,
+          discount: 0.0,
+          deliveryFee: 300.0,
+          totalAmount: p3.price + 300.0,
+          date: DateTime.now().subtract(const Duration(hours: 4)),
+          status: 'Confirmed',
+          deliveryAddress: defaultPakistaniAddresses.length > 1 ? defaultPakistaniAddresses[1] : defaultAddr,
+          deliveryMethod: 'Express Delivery (1–2 days)',
+          paymentMethod: 'Cash on Delivery',
+          paymentStatus: 'Pending (Cash on Delivery)',
+          estimatedDelivery: 'Oct 05, 2026',
         ),
       ];
+      saveOrders(initialOrders);
+      return initialOrders;
     }
     return [];
   }
 
   @override
-  Future<void> saveOrders(List<Order> orders) async {
-    final encoded = jsonEncode(orders.map((o) => {
-      'id': o.id,
-      'totalAmount': o.totalAmount,
-      'date': o.date.toIso8601String(),
-      'status': o.status,
-      'paymentMethod': o.paymentMethod,
-      'address': o.deliveryAddress?.toJson(),
-      'items': o.items.map((i) => {
-        'id': i.id,
-        'quantity': i.quantity,
-        'productId': i.product.id,
-      }).toList(),
-    }).toList());
-    await _prefs.setString('orders_v2', encoded);
+  void saveOrders(List<Order> orders) {
+    final encoded = jsonEncode(orders.map((o) => o.toMap()).toList());
+    _prefs.setString('orders_v3', encoded);
   }
 }

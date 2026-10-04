@@ -6,6 +6,11 @@ import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/coupon.dart';
 import '../models/address.dart';
+import '../models/delivery_method.dart';
+import '../models/payment_method.dart';
+import '../models/notification_item.dart';
+import '../models/return_request.dart';
+import '../core/currency_format.dart';
 import '../core/storage_service.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/category_repository.dart';
@@ -13,6 +18,10 @@ import '../repositories/cart_repository.dart';
 import '../repositories/wishlist_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/user_repository.dart';
+import '../repositories/review_repository.dart';
+import '../models/product_review.dart';
+import '../models/product_question.dart';
+import '../core/recommendation_service.dart';
 
 // ==================== REPOSITORY PROVIDERS ====================
 
@@ -53,6 +62,11 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
   return LocalUserRepository(storage);
 });
 
+final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LocalReviewRepository(prefs);
+});
+
 // ==================== CORE PRODUCT & CATEGORY PROVIDERS ====================
 
 final productsProvider = Provider<List<Product>>((ref) {
@@ -67,7 +81,7 @@ final categoryItemsProvider = Provider<List<CategoryItem>>((ref) {
   return ref.watch(categoryRepositoryProvider).getCategories();
 });
 
-// Specialized product catalog slices for Home Screen
+// Catalog slices for Home Screen
 final featuredProductsProvider = Provider<List<Product>>((ref) {
   return ref.watch(productRepositoryProvider).getFeaturedProducts();
 });
@@ -113,7 +127,7 @@ class DeliveryCityNotifier extends Notifier<String> {
   @override
   String build() {
     final storage = ref.read(storageServiceProvider);
-    return storage.getString('selected_city') ?? 'Gulberg, Lahore';
+    return storage.getString('selected_city') ?? 'Bahawalpur';
   }
 
   void setCity(String city) {
@@ -142,6 +156,24 @@ class AppliedCouponNotifier extends Notifier<Coupon?> {
 }
 
 final appliedCouponProvider = NotifierProvider<AppliedCouponNotifier, Coupon?>(() => AppliedCouponNotifier());
+
+// Delivery Method Provider
+class SelectedDeliveryMethodNotifier extends Notifier<DeliveryMethod> {
+  @override
+  DeliveryMethod build() => defaultDeliveryMethods.first;
+  void selectMethod(DeliveryMethod method) => state = method;
+}
+
+final selectedDeliveryMethodProvider = NotifierProvider<SelectedDeliveryMethodNotifier, DeliveryMethod>(() => SelectedDeliveryMethodNotifier());
+
+// Payment Method Provider
+class SelectedPaymentMethodNotifier extends Notifier<PaymentMethodOption> {
+  @override
+  PaymentMethodOption build() => availablePaymentOptions.first;
+  void selectMethod(PaymentMethodOption method) => state = method;
+}
+
+final selectedPaymentMethodProvider = NotifierProvider<SelectedPaymentMethodNotifier, PaymentMethodOption>(() => SelectedPaymentMethodNotifier());
 
 // ==================== CART & SAVE FOR LATER PROVIDERS ====================
 
@@ -172,7 +204,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
     String? selectedVariant,
     double? unitPrice,
   }) {
-    final effectivePrice = unitPrice ?? product.price;
+    final effectivePrice = unitPrice ?? product.getPriceForVariants(storage: selectedStorage, size: selectedSize);
     final existingIndex = state.indexWhere((item) =>
         item.product.id == product.id &&
         (item.selectedColor ?? '') == (selectedColor ?? '') &&
@@ -241,13 +273,9 @@ class CartNotifier extends Notifier<List<CartItem>> {
   double get subtotal => state.fold(0.0, (total, item) => total + item.subtotal);
   int get itemCount => state.fold(0, (total, item) => total + item.quantity);
 
-  double calculateDiscount(Coupon? coupon) {
+  double calculateDiscount(Coupon? coupon, {double deliveryFee = 150.0}) {
     if (coupon == null) return 0;
-    if (subtotal < coupon.minOrderAmount) return 0;
-    if (coupon.isPercentage) {
-      return subtotal * (coupon.discount / 100);
-    }
-    return coupon.discount;
+    return coupon.calculateSavings(subtotal, deliveryFee);
   }
 }
 
@@ -399,33 +427,133 @@ final wishlistProvider = NotifierProvider<WishlistNotifier, List<Product>>(() {
 class OrdersNotifier extends Notifier<List<Order>> {
   @override
   List<Order> build() {
-    _loadOrders();
-    return [];
-  }
-
-  void _loadOrders() async {
     final repo = ref.read(orderRepositoryProvider);
     final products = ref.read(productsProvider);
-    state = await repo.getOrders(products);
+    return repo.getOrders(products);
   }
 
+  void _persist() {
+    ref.read(orderRepositoryProvider).saveOrders(state);
+  }
+
+  Order createOrder({
+    required List<CartItem> items,
+    required double totalAmount,
+    required double subtotal,
+    required double discount,
+    required double deliveryFee,
+    required Address address,
+    required String deliveryMethod,
+    required String paymentMethod,
+    required String estimatedDelivery,
+    String? notes,
+  }) {
+    final now = DateTime.now();
+    final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final count = state.length + 1;
+    final orderId = 'ORD-$dateStr-${count.toString().padLeft(3, '0')}';
+
+    final newOrder = Order(
+      id: orderId,
+      items: List.from(items),
+      subtotal: subtotal,
+      discount: discount,
+      deliveryFee: deliveryFee,
+      totalAmount: totalAmount,
+      date: now,
+      status: 'Confirmed',
+      deliveryAddress: address,
+      deliveryMethod: deliveryMethod,
+      paymentMethod: paymentMethod,
+      paymentStatus: 'Pending (Cash on Delivery)',
+      estimatedDelivery: estimatedDelivery,
+      notes: notes,
+      customerId: 'usr_101',
+    );
+
+    state = [newOrder, ...state];
+    _persist();
+
+    // Trigger in-app notification
+    ref.read(inAppNotificationsProvider.notifier).addNotification(
+      title: 'Order Confirmed! 🎉',
+      message: 'Your order $orderId for ${CurrencyFormat.format(totalAmount)} has been placed via Cash on Delivery.',
+      type: NotificationType.orderPlaced,
+      orderId: orderId,
+    );
+
+    return newOrder;
+  }
+
+  // Backward compatible addOrder
   void addOrder(
     List<CartItem> items,
     double totalAmount, {
     Address? address,
     String paymentMethod = 'Cash on Delivery',
   }) {
-    final newOrder = Order(
-      id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-      items: List.from(items),
+    final addresses = ref.read(addressesProvider);
+    final defaultAddr = address ?? addresses.where((a) => a.isDefault).firstOrNull ?? addresses.firstOrNull ?? defaultPakistaniAddresses.first;
+    createOrder(
+      items: items,
       totalAmount: totalAmount,
-      date: DateTime.now(),
-      status: 'Confirmed',
-      deliveryAddress: address,
+      subtotal: totalAmount,
+      discount: 0,
+      deliveryFee: 150,
+      address: defaultAddr,
+      deliveryMethod: 'Standard Delivery (2–4 days)',
       paymentMethod: paymentMethod,
+      estimatedDelivery: '2–4 business days',
     );
-    state = [newOrder, ...state];
-    ref.read(orderRepositoryProvider).saveOrders(state);
+  }
+
+  bool cancelOrder(String orderId) {
+    final idx = state.indexWhere((o) => o.id == orderId);
+    if (idx < 0) return false;
+    final order = state[idx];
+    if (!order.canCancel) return false;
+
+    final updated = List<Order>.from(state);
+    updated[idx] = order.copyWith(
+      status: 'Cancelled',
+      paymentStatus: 'Void (Order Cancelled)',
+    );
+    state = updated;
+    _persist();
+
+    ref.read(inAppNotificationsProvider.notifier).addNotification(
+      title: 'Order Cancelled',
+      message: 'Order $orderId has been successfully cancelled.',
+      type: NotificationType.system,
+      orderId: orderId,
+    );
+    return true;
+  }
+
+  /// Reorder items from a past order, verifying stock and preserving variants
+  ({int readdedCount, int skippedCount}) reorderItems(Order order) {
+    int readded = 0;
+    int skipped = 0;
+    final cartNotifier = ref.read(cartProvider.notifier);
+
+    for (final item in order.items) {
+      if (item.product.isOutOfStock) {
+        skipped++;
+        continue;
+      }
+      cartNotifier.addItem(
+        item.product,
+        quantity: item.quantity.clamp(1, item.product.availableStock),
+        selectedColor: item.selectedColor,
+        selectedSize: item.selectedSize,
+        selectedStorage: item.selectedStorage,
+        selectedVariant: item.selectedVariant,
+        unitPrice: item.unitPrice,
+      );
+      readded++;
+    }
+
+    return (readdedCount: readded, skippedCount: skipped);
   }
 }
 
@@ -446,18 +574,43 @@ class AddressesNotifier extends Notifier<List<Address>> {
   }
 
   void addAddress(Address address) {
-    if (address.isDefault) {
+    if (address.isDefault || state.isEmpty) {
       state = state.map((a) => a.copyWith(isDefault: false)).toList();
+      state = [...state, address.copyWith(isDefault: true)];
+    } else {
+      state = [...state, address];
     }
-    state = [...state, address];
-    if (state.length == 1) {
-      state = [state.first.copyWith(isDefault: true)];
+    _save();
+  }
+
+  void updateAddress(Address address) {
+    if (address.isDefault) {
+      state = state.map((a) => a.id == address.id ? address : a.copyWith(isDefault: false)).toList();
+    } else {
+      final isCurrentlyDefault = state.where((a) => a.id == address.id && a.isDefault).isNotEmpty;
+      if (isCurrentlyDefault && state.length > 1) {
+        final otherId = state.firstWhere((a) => a.id != address.id).id;
+        state = state.map((a) {
+          if (a.id == address.id) return address.copyWith(isDefault: false);
+          if (a.id == otherId) return a.copyWith(isDefault: true);
+          return a;
+        }).toList();
+      } else {
+        state = state.map((a) => a.id == address.id ? address : a).toList();
+      }
     }
     _save();
   }
 
   void removeAddress(String id) {
+    final removedWasDefault = state.where((a) => a.id == id && a.isDefault).isNotEmpty;
     state = state.where((a) => a.id != id).toList();
+    if (removedWasDefault && state.isNotEmpty) {
+      state = [
+        state.first.copyWith(isDefault: true),
+        ...state.sublist(1),
+      ];
+    }
     _save();
   }
 
@@ -527,14 +680,14 @@ class SelectedSubcategoryNotifier extends Notifier<String?> {
 
 final selectedSubcategoryProvider = NotifierProvider<SelectedSubcategoryNotifier, String?>(() => SelectedSubcategoryNotifier());
 
-// Search Results (Deep tokenized search across all product attributes)
+// Search Results
 final searchResultsProvider = Provider<List<Product>>((ref) {
   final repo = ref.watch(productRepositoryProvider);
   final query = ref.watch(searchQueryProvider);
   return repo.searchProducts(query);
 });
 
-// Filtered Products (For category & subcategory browsing)
+// Filtered Products
 final filteredProductsProvider = Provider<List<Product>>((ref) {
   final repo = ref.watch(productRepositoryProvider);
   final category = ref.watch(selectedCategoryProvider);
@@ -609,18 +762,21 @@ class UserProfile {
   final String name;
   final String email;
   final String phone;
+  final String avatarUrl;
 
   const UserProfile({
     required this.name,
     required this.email,
     required this.phone,
+    this.avatarUrl = '',
   });
 
-  UserProfile copyWith({String? name, String? email, String? phone}) {
+  UserProfile copyWith({String? name, String? email, String? phone, String? avatarUrl}) {
     return UserProfile(
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
     );
   }
 }
@@ -631,17 +787,285 @@ class UserProfileNotifier extends Notifier<UserProfile> {
     final storage = ref.read(storageServiceProvider);
     final name = storage.getString('user_name') ?? 'Umair';
     final email = storage.getString('user_email') ?? 'umair@example.com';
-    final phone = storage.getString('user_phone') ?? '+92 300 1234567';
-    return UserProfile(name: name, email: email, phone: phone);
+    final phone = storage.getString('user_phone') ?? '+92 301 7894561';
+    final avatar = storage.getString('user_avatar') ?? '';
+    return UserProfile(name: name, email: email, phone: phone, avatarUrl: avatar);
   }
 
-  void updateProfile({required String name, required String email, required String phone}) {
-    state = UserProfile(name: name, email: email, phone: phone);
+  void updateProfile({required String name, required String email, required String phone, String? avatarUrl}) {
+    state = UserProfile(
+      name: name,
+      email: email,
+      phone: phone,
+      avatarUrl: avatarUrl ?? state.avatarUrl,
+    );
     final storage = ref.read(storageServiceProvider);
     storage.saveString('user_name', name);
     storage.saveString('user_email', email);
     storage.saveString('user_phone', phone);
+    if (avatarUrl != null) {
+      storage.saveString('user_avatar', avatarUrl);
+    }
   }
 }
 
 final userProfileProvider = NotifierProvider<UserProfileNotifier, UserProfile>(() => UserProfileNotifier());
+
+// ==================== IN-APP NOTIFICATIONS PROVIDER ====================
+
+class InAppNotificationsNotifier extends Notifier<List<NotificationItem>> {
+  @override
+  List<NotificationItem> build() {
+    _load();
+    return [];
+  }
+
+  void _load() {
+    final storage = ref.read(storageServiceProvider);
+    final data = storage.getJson('in_app_notifications_v1');
+    if (data != null && data is List && data.isNotEmpty) {
+      try {
+        state = data.map((e) => NotificationItem.fromMap(Map<String, dynamic>.from(e))).toList();
+        return;
+      } catch (_) {}
+    }
+    // Default welcome promotions
+    state = [
+      NotificationItem(
+        id: 'notif_promo_1',
+        title: 'Welcome to E-Store Pakistan! 🇵🇰',
+        message: 'Use coupon code WELCOME10 for 10% off your purchase.',
+        type: NotificationType.promotion,
+        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+        isRead: false,
+      ),
+      NotificationItem(
+        id: 'notif_promo_2',
+        title: 'Nationwide Free Delivery Weekend 🚚',
+        message: 'Apply code FREESHIP on any cart value above Rs. 1,500.',
+        type: NotificationType.promotion,
+        timestamp: DateTime.now().subtract(const Duration(days: 1)),
+        isRead: false,
+      ),
+    ];
+    _save();
+  }
+
+  void _save() {
+    ref.read(storageServiceProvider).saveJson('in_app_notifications_v1', state.map((n) => n.toMap()).toList());
+  }
+
+  void addNotification({
+    required String title,
+    required String message,
+    required NotificationType type,
+    String? orderId,
+  }) {
+    final newNotif = NotificationItem(
+      id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      message: message,
+      type: type,
+      timestamp: DateTime.now(),
+      isRead: false,
+      orderId: orderId,
+    );
+    state = [newNotif, ...state];
+    _save();
+    ref.read(notificationCountProvider.notifier).addNotification();
+  }
+
+  void markAsRead(String id) {
+    state = state.map((n) => n.id == id ? n.copyWith(isRead: true) : n).toList();
+    _save();
+  }
+
+  void markAllAsRead() {
+    state = state.map((n) => n.copyWith(isRead: true)).toList();
+    _save();
+    ref.read(notificationCountProvider.notifier).markAllAsRead();
+  }
+
+  void clearAll() {
+    state = [];
+    _save();
+    ref.read(notificationCountProvider.notifier).markAllAsRead();
+  }
+
+  int get unreadCount => state.where((n) => !n.isRead).length;
+}
+
+final inAppNotificationsProvider = NotifierProvider<InAppNotificationsNotifier, List<NotificationItem>>(() => InAppNotificationsNotifier());
+
+// ==================== RETURN REQUESTS PROVIDER ====================
+
+class ReturnRequestsNotifier extends Notifier<List<ReturnRequest>> {
+  @override
+  List<ReturnRequest> build() {
+    _load();
+    return [];
+  }
+
+  void _load() {
+    final storage = ref.read(storageServiceProvider);
+    final data = storage.getJson('return_requests_v1');
+    if (data != null && data is List && data.isNotEmpty) {
+      try {
+        state = data.map((e) => ReturnRequest.fromMap(Map<String, dynamic>.from(e))).toList();
+        return;
+      } catch (_) {}
+    }
+    state = [];
+  }
+
+  void _save() {
+    ref.read(storageServiceProvider).saveJson('return_requests_v1', state.map((r) => r.toMap()).toList());
+  }
+
+  void submitRequest({
+    required String orderId,
+    required String itemId,
+    required String productName,
+    required String reason,
+    String? comments,
+  }) {
+    final newReq = ReturnRequest(
+      returnRequestId: 'RET-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      orderId: orderId,
+      itemId: itemId,
+      productName: productName,
+      reason: reason,
+      status: 'Submitted',
+      createdAt: DateTime.now(),
+      comments: comments,
+    );
+    state = [newReq, ...state];
+    _save();
+  }
+}
+
+final returnRequestsProvider = NotifierProvider<ReturnRequestsNotifier, List<ReturnRequest>>(() => ReturnRequestsNotifier());
+
+// ==================== PRODUCT REVIEWS & RATINGS NOTIFIER ====================
+
+class ReviewsNotifier extends Notifier<List<ProductReview>> {
+  @override
+  List<ProductReview> build() {
+    final repo = ref.read(reviewRepositoryProvider);
+    return repo.getAllReviews();
+  }
+
+  void addReview({
+    required String productId,
+    required double rating,
+    required String comment,
+    required String userName,
+    String userCity = 'Pakistan',
+    bool verifiedPurchase = false,
+  }) {
+    final newReview = ProductReview(
+      id: 'rev_${DateTime.now().millisecondsSinceEpoch}',
+      productId: productId,
+      userId: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+      userName: userName,
+      userCity: userCity,
+      rating: rating,
+      comment: comment,
+      createdAt: DateTime.now(),
+      verifiedPurchase: verifiedPurchase,
+      helpfulCount: 0,
+    );
+    ref.read(reviewRepositoryProvider).addReview(newReview);
+    state = [newReview, ...state];
+  }
+}
+
+final reviewsProvider = NotifierProvider<ReviewsNotifier, List<ProductReview>>(() => ReviewsNotifier());
+
+final productReviewsProvider = Provider.family<List<ProductReview>, String>((ref, productId) {
+  final allReviews = ref.watch(reviewsProvider);
+  return allReviews.where((r) => r.productId == productId).toList();
+});
+
+final ratingBreakdownProvider = Provider.family<RatingBreakdown, Product>((ref, product) {
+  final reviews = ref.watch(productReviewsProvider(product.id));
+  return RatingBreakdown.fromReviews(reviews, product.rating);
+});
+
+final isProductPurchasedByUserProvider = Provider.family<bool, String>((ref, productId) {
+  final orders = ref.watch(ordersProvider);
+  for (final order in orders) {
+    if (order.items.any((item) => item.product.id == productId)) {
+      return true;
+    }
+  }
+  return false;
+});
+
+// ==================== PRODUCT QUESTIONS NOTIFIER ====================
+
+class QuestionsNotifier extends Notifier<List<ProductQuestion>> {
+  @override
+  List<ProductQuestion> build() {
+    final repo = ref.read(reviewRepositoryProvider);
+    final allProducts = ref.read(productsProvider);
+    final allQuestions = <ProductQuestion>[];
+    for (final p in allProducts) {
+      allQuestions.addAll(repo.getQuestionsForProduct(p.id));
+    }
+    return allQuestions;
+  }
+
+  void askQuestion({
+    required String productId,
+    required String question,
+    required String askedBy,
+  }) {
+    final newQuestion = ProductQuestion(
+      id: 'q_${DateTime.now().millisecondsSinceEpoch}',
+      productId: productId,
+      question: question,
+      askedBy: askedBy,
+      answeredBy: 'Verified Merchant',
+      createdAt: DateTime.now(),
+      answer: 'Thank you for asking! A merchant representative will verify and answer your query shortly.',
+      answeredAt: DateTime.now(),
+    );
+    ref.read(reviewRepositoryProvider).addQuestion(newQuestion);
+    state = [newQuestion, ...state];
+  }
+}
+
+final questionsProvider = NotifierProvider<QuestionsNotifier, List<ProductQuestion>>(() => QuestionsNotifier());
+
+final productQuestionsProvider = Provider.family<List<ProductQuestion>, String>((ref, productId) {
+  final all = ref.watch(questionsProvider);
+  return all.where((q) => q.productId == productId).toList();
+});
+
+// ==================== SMART RECOMMENDATIONS PROVIDERS ====================
+
+final personalizedHomeSectionsProvider = Provider<List<RecommendationSection>>((ref) {
+  final catalog = ref.watch(productsProvider);
+  final recentlyViewed = ref.watch(recentlyViewedProvider);
+  final wishlist = ref.watch(wishlistProvider);
+  final orders = ref.watch(ordersProvider);
+
+  return SmartRecommendationService.generateHomeRecommendations(
+    catalog: catalog,
+    recentlyViewed: recentlyViewed,
+    wishlist: wishlist,
+    orders: orders,
+  );
+});
+
+final cartAccessoriesProvider = Provider<List<Product>>((ref) {
+  final catalog = ref.watch(productsProvider);
+  final cartItems = ref.watch(cartProvider);
+
+  return SmartRecommendationService.getCartRecommendations(
+    catalog: catalog,
+    cartItems: cartItems,
+  );
+});
+

@@ -573,6 +573,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ThemeData theme,
   ) {
     final activeFilters = _activeFilterCount;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,41 +699,79 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         // Product Grid or Empty
         Expanded(
           child: results.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off_rounded, size: 70, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No products found',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 16),
+                      Icon(Icons.search_off_rounded, size: 68, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No products found',
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 17),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        activeFilters > 0
+                            ? 'No products match your current filters.'
+                            : 'No matches found for "$query".',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          activeFilters > 0
-                              ? 'No products match your current filters. Try resetting filters.'
-                              : 'We could not find any matches for "$query".\nTry checking spelling or search keywords like "Sony", "Jordan", "Watch", or "Khaadi".',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            if (activeFilters > 0) {
-                              _resetFilters();
-                            } else {
-                              _controller.clear();
-                              _onSearchChanged('');
-                            }
-                          },
-                          icon: const Icon(Icons.refresh),
-                          label: Text(activeFilters > 0 ? 'Reset Filters' : 'Clear Search'),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Interactive Suggestions
+                      const Text(
+                        'Try searching for:',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ['wireless', 'shoes', 'smart watch', 'kurta', 'headphones', 'bag'].map((s) {
+                          return ActionChip(
+                            label: Text(s),
+                            avatar: const Icon(Icons.search, size: 14),
+                            onPressed: () => _selectSuggestion(s),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Action Buttons: Clear Search & Browse Categories
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 12,
+                        runSpacing: 10,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              if (activeFilters > 0) {
+                                _resetFilters();
+                              } else {
+                                _controller.clear();
+                                _onSearchChanged('');
+                              }
+                            },
+                            icon: const Icon(Icons.clear_rounded, size: 16),
+                            label: Text(activeFilters > 0 ? 'Reset Filters' : 'Clear Search'),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              ref.read(bottomNavIndexProvider.notifier).setIndex(1);
+                              Navigator.pop(context);
+                            },
+                            icon: const Icon(Icons.category_outlined, size: 16),
+                            label: const Text('Browse Categories'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 )
               : GridView.builder(
